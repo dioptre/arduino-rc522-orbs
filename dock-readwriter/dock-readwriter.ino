@@ -38,6 +38,8 @@ TODO:
 
 #include <SPI.h>
 #include <MFRC522.h>
+#include <Adafruit_NeoPixel.h>
+
 
 // Pin constants
 #define SS_PIN          9                   // SPI pin - Change for nano vs mega etc
@@ -46,12 +48,39 @@ TODO:
 #define LED_SHIELD      11                  // Protoshield LED pin
 #define BUTTON          2                   // Protoshield button pin 
 
-// RFID constants
-MFRC522 rfid(SS_PIN, RST_PIN);              // Create MFRC522 instance
-MFRC522::StatusCode status;                 // Variable to get card status
-#define maxRetries      10                  // Number of retries for failed read/write operations
-#define retryDelay      200                 // Delay between retries in milliseconds
-#define DELAY_AFTER_CARD_PRESENT 1000       // Delay after card is presented
+// Button constants
+#define PRESSED LOW
+#define RELEASED HIGH
+
+// NeoPixel LED ring
+#define NEOPIXEL_PIN    6                   // NeoPixel pin
+#define NEOPIXEL_COUNT  8                   // Number of NeoPixels
+// NeoPixel strip object
+Adafruit_NeoPixel strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+// Tracking patterns
+unsigned long pixelPrevious = 0;            // Previous Pixel Millis
+unsigned long patternPrevious = 0;          // Previous Pattern Millis
+int           patternCurrent = 0;           // Current Pattern Number
+int           patternInterval = 5000;       // Pattern Interval (ms)
+bool          patternComplete = false;
+uint8_t       pixelBrightness = 25;         // Max 255
+uint8_t       targetBrightness = 25;        // Max 255
+// Tracking pixels and pixel timing
+int           pixelInterval = 50;           // Pixel Interval (ms)
+int           pixelQueue = 0;               // Pattern Pixel Queue
+int           pixelCycle = 0;               // Pattern Pixel Cycle
+uint16_t      pixelNumber = NEOPIXEL_COUNT; // Total Number of Pixels
+// LED patterns
+enum LEDPattern {
+  LED_PATTERN_NONE,
+  LED_PATTERN_NO_ORB,
+  LED_PATTERN_ORB_CONNECTED,
+  LED_PATTERN_ORB_READING,
+  LED_PATTERN_ORB_WRITING,
+  LED_PATTERN_ORB_ERROR,
+};
+// Current LED pattern
+LEDPattern currentLEDPattern = LED_PATTERN_NO_ORB;
 
 // Status constants
 #define STATUS_SUCCEEDED 1
@@ -59,11 +88,7 @@ MFRC522::StatusCode status;                 // Variable to get card status
 #define STATUS_FALSE 3
 #define STATUS_TRUE 4
 
-// Button constants
-#define PRESSED LOW
-#define RELEASED HIGH
-
-// Our station information
+// Stations
 #define NUM_STATIONS 16
 #define NUM_STATIONS_PRINT 6 // Temporary
 struct Station {
@@ -72,19 +97,38 @@ struct Station {
 };
 Station stations[NUM_STATIONS];
 int totalStationEnergy = 0;
-
-// Array of station IDs
 const char* stationIDs[NUM_STATIONS] = {
   "CONSOLE", "DISTILLER", "CASINO", "FOREST", "ALCHEMY", "PIPES",
   "TBD 7", "TBD 8", "TBD 9", "TBD 10", "TBD 11", "TBD 12", "TBD 13", "TBD 14", "TBD 15", "TBD 16"
 };
 
-// Array of traits
+// Orb Traits
+#define NUM_TRAITS 6
+#define TRAIT_NONE 0
 const char* traits[] = {
-  "NONE", "LAME", "DUMB", "COOL", "SICK", "FISH", "NERD"
+  "NONE", "RUMI", "SELF", "SHAM", "HOPE", "DISC"
+};
+const char* traitNames[] = {
+  "None", "Rumination", "Self Doubt", "Shame Spiral", "Hopelessness", "Discontentment"
+};
+const uint32_t traitColors[] = {
+  strip.Color(139, 0, 0),      // Dark red for NONE
+  strip.Color(255, 128, 0),    // Orange for RUMI (Rumination)
+  strip.Color(255, 220, 0),    // Warmer Yellow for SELF (Self Doubt)
+  strip.Color(0, 255, 0),      // Green for SHAM (Shame Spiral)
+  strip.Color(0, 0, 255),      // Blue for HOPE (Hopelessness)
+  strip.Color(200, 0, 180)     // Deeper Magenta for DISC (Discontentment)
 };
 char trait[5] = "NONE";
 
+// NFC/RFID Reader
+MFRC522 rfid(SS_PIN, RST_PIN);              // Create MFRC522 instance
+MFRC522::StatusCode status;                 // Variable to get card status
+#define maxRetries      10                  // Number of retries for failed read/write operations
+#define retryDelay      200                 // Delay between retries in milliseconds
+#define DELAY_AFTER_CARD_PRESENT 1000       // Delay after card is presented
+
+// NFC/RFID Communication
 // Ultralight memory is 16 pages. 4 bytes per page.  
 // Pages 0 to 4 are reserved for special functions.
 // Page 6 contains the word "ORBS" so we can verify the NFC has been configured as an orb.
@@ -97,8 +141,8 @@ byte buffer[4 * (2 + NUM_STATIONS / 2)];      // Data transfer buffer
 const char header[] = "ORBS";                 // Header to check if the NFC has been initialized as an orb
 #define STATION_PAGE_OFFSET (PAGE_OFFSET + 2)
 
-// Variable for reading the pushbutton status
-int buttonState = 0;  // variable for reading the pushbutton status
+// Button state
+int buttonState = 0;
 
 
 /********************** SETUP *****************************/
@@ -116,13 +160,18 @@ void setup() {
   digitalWrite(LED_SHIELD, LOW);
   pinMode(BUTTON, INPUT_PULLUP);
 
+  // Initialize NeoPixel LED ring
+  strip.begin();                        // Initialize NeoPixel strip object
+  strip.show();                         // Turn OFF all pixels ASAP
+  strip.setBrightness(pixelBrightness); // Set BRIGHTNESS to about 1/5 
+
   // Initialize NFC reader
-  SPI.begin();                        // Init SPI bus
-  rfid.PCD_Init();                    // Init MFRC522 card  
+  SPI.begin();                          // Init SPI bus
+  rfid.PCD_Init();                      // Init MFRC522 card  
   delay(4);
   Serial.print("MFRC522 software version = ");
   Serial.println(rfid.PCD_ReadRegister(rfid.VersionReg), HEX);
-  rfid.PCD_DumpVersionToSerial();     // Show details of PCD - MFRC522 Card Reader details
+  rfid.PCD_DumpVersionToSerial();       // Show details of PCD - MFRC522 Card Reader details
   Serial.println("PUT YOUR ORBS IN MEEEEE");
 }
 
@@ -131,14 +180,18 @@ void setup() {
 
 void loop() {
 
+  // Run NeoPixel LED ring patterns
+  runLEDPatterns();
+
   // Wait for a new card and select the card
   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial())
     return;
 
-  digitalWrite(LED_SHIELD, HIGH);  // turn the LED on
+  // Turn on status LED
+  digitalWrite(LED_SHIELD, HIGH);
 
   // Wait for NFC to get closer
-  delay(DELAY_AFTER_CARD_PRESENT);
+  // delay(DELAY_AFTER_CARD_PRESENT);
 
   // If the NFC has not been configured as an orb, do so
   int checkORBSStatus = checkORBS();
@@ -161,6 +214,9 @@ void loop() {
     return;
   }
 
+  // Set the LED pattern to show the Orb's trait
+  currentLEDPattern = LED_PATTERN_ORB_CONNECTED;
+
   // TODO: Send a signal to the attached Raspberry Pi with station information and orb trait
 
   // TODO: When NFC is removed, send a signal to the attached Raspberry Pi
@@ -178,10 +234,10 @@ void loop() {
   // ...   - [trait]
 
   while (isNFCActive()) {
-    if (digitalRead(BUTTON) == PRESSED) {
-      // Briefly flash LED
-      flashLED();
+    // Run NeoPixel LED ring patterns
+    runLEDPatterns();
 
+    if (digitalRead(BUTTON) == PRESSED) {
       // Update stations
       int updateStationsStatus = updateStations();
       if (updateStationsStatus == STATUS_FAILED) {
@@ -203,6 +259,7 @@ void loop() {
   // Reset various variables so they don't polluate other orbs
   Serial.println("Orb disconnected, ending session...");
   // TODO: Send a signal to the attached Raspberry Pi that orb has disconnected
+  currentLEDPattern = LED_PATTERN_NO_ORB;
   memset(buffer, 0, sizeof(buffer));
   initializeStations();
   totalStationEnergy = 0;
@@ -215,7 +272,8 @@ void loop() {
 }
 
 
-/********************** FUNCTIONS *****************************/
+/********************** ORB FUNCTIONS *****************************/
+
 
 // Initialize NFC with "ORBS" header and default station information
 int resetOrb() {
@@ -446,16 +504,6 @@ bool isNFCActive() {
 }
 
 
-// Dump a byte array as hex values to Serial.
-void printHex(byte *buffer, byte bufferSize) {
-
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
-}
-
-
 // Dump debug info about the card; PICC_HaltA() is automatically called
 void printDebugInfo() {
 
@@ -464,6 +512,197 @@ void printDebugInfo() {
   Serial.print(F("RFID Tag UID:"));
   printHex(rfid.uid.uidByte, rfid.uid.size);
   Serial.println("");
+}
+
+
+/********************** LED FUNCTIONS *****************************/
+
+
+// Run the current NeoPixel LED ring pattern
+void runLEDPatterns() {
+
+  unsigned long currentMillis = millis();     // Tracks current time
+  if (currentMillis - pixelPrevious >= pixelInterval) {
+    pixelPrevious = currentMillis;  // Update the previous time
+
+    switch (currentLEDPattern) {
+      case LED_PATTERN_NO_ORB:
+        fadeTraitColors(25);  // Adjust the wait time as needed
+        break;
+      case LED_PATTERN_ORB_CONNECTED:
+        theaterChase(strip.Color(0, 0, 255), 100);
+        break;
+      case LED_PATTERN_ORB_READING:
+        theaterChase(strip.Color(0, 255, 0), 100);
+        break;
+      case LED_PATTERN_ORB_WRITING:
+        theaterChase(strip.Color(255, 0, 0), 100);
+        break;
+      case LED_PATTERN_ORB_ERROR:
+        theaterChase(strip.Color(255, 0, 255), 100);
+        break;
+      case LED_PATTERN_NONE:
+      default:
+        strip.clear();
+        strip.show();
+        break;
+    }
+    
+    // Move brightness towards target brightness
+    if (pixelBrightness > targetBrightness) {
+        pixelBrightness--;
+    strip.setBrightness(pixelBrightness);
+    } else if (pixelBrightness < targetBrightness) {
+        pixelBrightness++;
+        strip.setBrightness(pixelBrightness);
+    }
+
+    // Update the strip with the new color and brightness
+    strip.show();
+  }
+}
+
+
+// Fill strip pixels one after another with a color. Strip is NOT cleared
+// first; anything there will be covered pixel by pixel. Pass in color
+// (as a single 'packed' 32-bit value, which you can get by calling
+// strip.Color(red, green, blue) as shown in the loop() function above),
+// and a delay time (in milliseconds) between pixels.
+void colorWipe(uint32_t color, int wait) {
+  static uint16_t current_pixel = 0;
+  pixelInterval = wait;                        //  Update delay time
+  strip.setPixelColor(current_pixel++, color); //  Set pixel's color (in RAM)
+  strip.show();                                //  Update strip to match
+  if(current_pixel >= pixelNumber) {           //  Loop the pattern from the first LED
+    current_pixel = 0;
+    patternComplete = true;
+  }
+}
+
+// Fade between all trait colors except NONE
+void fadeTraitColors(int wait) {
+  // Starting at 1 to skip NONE trait
+  static uint8_t colorIndex = 1;
+  static uint8_t fadeStep = 0;
+  static uint32_t currentColor = traitColors[1];
+  static uint32_t nextColor = traitColors[2];;
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 15;
+
+  uint8_t r = map(fadeStep, 0, 255, (currentColor >> 16) & 0xFF, (nextColor >> 16) & 0xFF);
+  uint8_t g = map(fadeStep, 0, 255, (currentColor >> 8) & 0xFF, (nextColor >> 8) & 0xFF);
+  uint8_t b = map(fadeStep, 0, 255, currentColor & 0xFF, nextColor & 0xFF);
+  uint32_t fadeColor = strip.Color(r, g, b);
+
+  // Set all pixels to the fade color
+  for(uint16_t i = 0; i < pixelNumber; i++) {
+    strip.setPixelColor(i, fadeColor);
+  }
+
+  fadeStep += 1;  // Adjust this value to change fade speed
+  if (fadeStep >= 255) {
+    fadeStep = 0;
+    colorIndex = (colorIndex % (NUM_TRAITS - 1)) + 1;
+    currentColor = nextColor;
+    nextColor = traitColors[(colorIndex % (NUM_TRAITS - 1)) + 1];
+  }
+}
+
+// Theater-marquee-style chasing lights. Pass in a color (32-bit value,
+// a la strip.Color(r,g,b) as mentioned above), and a delay time (in ms)
+// between frames.
+void theaterChase(uint32_t color, int wait) {
+
+  static uint32_t loop_count = 0;
+  static uint16_t current_pixel = 0;
+
+  pixelInterval = wait;                   //  Update delay time
+
+  strip.clear();
+
+  for(int c=current_pixel; c < pixelNumber; c += 3) {
+    strip.setPixelColor(c, color);
+  }
+  strip.show();
+
+  current_pixel++;
+  if (current_pixel >= 3) {
+    current_pixel = 0;
+    loop_count++;
+  }
+
+  if (loop_count >= 10) {
+    current_pixel = 0;
+    loop_count = 0;
+    patternComplete = true;
+  }
+}
+
+
+// Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
+void rainbow(uint8_t wait) {
+
+  if(pixelInterval != wait)
+    pixelInterval = wait;                   
+  for(uint16_t i=0; i < pixelNumber; i++) {
+    strip.setPixelColor(i, Wheel((i + pixelCycle) & 255)); //  Update delay time  
+  }
+  strip.show();                             //  Update strip to match
+  pixelCycle++;                             //  Advance current cycle
+  if(pixelCycle >= 256)
+    pixelCycle = 0;                         //  Loop the cycle back to the begining
+}
+
+
+//Theatre-style crawling lights with rainbow effect
+void theaterChaseRainbow(uint8_t wait) {
+
+  if(pixelInterval != wait)
+    pixelInterval = wait;                   //  Update delay time  
+  for(int i=0; i < pixelNumber; i+=3) {
+    strip.setPixelColor(i + pixelQueue, Wheel((i + pixelCycle) % 255)); //  Update delay time  
+  }
+  strip.show();
+  for(int i=0; i < pixelNumber; i+=3) {
+    strip.setPixelColor(i + pixelQueue, strip.Color(0, 0, 0)); //  Update delay time  
+  }      
+  pixelQueue++;                           //  Advance current queue  
+  pixelCycle++;                           //  Advance current cycle
+  if(pixelQueue >= 3)
+    pixelQueue = 0;                       //  Loop
+  if(pixelCycle >= 256)
+    pixelCycle = 0;                       //  Loop
+}
+
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+}
+
+
+/********************** MISC FUNCTIONS *****************************/
+
+
+// Dump a byte array as hex values to Serial.
+void printHex(byte *buffer, byte bufferSize) {
+
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], HEX);
+  }
 }
 
 
