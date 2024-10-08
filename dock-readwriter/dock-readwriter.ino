@@ -253,7 +253,8 @@ void loop() {
     }
     
     // Small delay to prevent excessive CPU usage
-    delay(250);
+    // TODO: Change this to non-blocking
+    //delay(250);
   }
 
   // Reset various variables so they don't polluate other orbs
@@ -527,10 +528,10 @@ void runLEDPatterns() {
 
     switch (currentLEDPattern) {
       case LED_PATTERN_NO_ORB:
-        fadeTraitColors(25);  // Adjust the wait time as needed
+        fadeTraitColors(20);  // Adjust the wait time as needed
         break;
       case LED_PATTERN_ORB_CONNECTED:
-        theaterChase(strip.Color(0, 0, 255), 100);
+        rotateWeakeningRedDot(100);
         break;
       case LED_PATTERN_ORB_READING:
         theaterChase(strip.Color(0, 255, 0), 100);
@@ -549,12 +550,12 @@ void runLEDPatterns() {
     }
     
     // Move brightness towards target brightness
-    if (pixelBrightness > targetBrightness) {
-        pixelBrightness--;
-    strip.setBrightness(pixelBrightness);
-    } else if (pixelBrightness < targetBrightness) {
-        pixelBrightness++;
-        strip.setBrightness(pixelBrightness);
+    static uint8_t brightnessInterval = 1;
+    static uint8_t brightnessPrevious = pixelBrightness;
+    if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= brightnessInterval) {
+      brightnessPrevious = currentMillis;
+      pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
+      strip.setBrightness(pixelBrightness);
     }
 
     // Update the strip with the new color and brightness
@@ -562,22 +563,6 @@ void runLEDPatterns() {
   }
 }
 
-
-// Fill strip pixels one after another with a color. Strip is NOT cleared
-// first; anything there will be covered pixel by pixel. Pass in color
-// (as a single 'packed' 32-bit value, which you can get by calling
-// strip.Color(red, green, blue) as shown in the loop() function above),
-// and a delay time (in milliseconds) between pixels.
-void colorWipe(uint32_t color, int wait) {
-  static uint16_t current_pixel = 0;
-  pixelInterval = wait;                        //  Update delay time
-  strip.setPixelColor(current_pixel++, color); //  Set pixel's color (in RAM)
-  strip.show();                                //  Update strip to match
-  if(current_pixel >= pixelNumber) {           //  Loop the pattern from the first LED
-    current_pixel = 0;
-    patternComplete = true;
-  }
-}
 
 // Fade between all trait colors except NONE
 void fadeTraitColors(int wait) {
@@ -608,6 +593,122 @@ void fadeTraitColors(int wait) {
     nextColor = traitColors[(colorIndex % (NUM_TRAITS - 1)) + 1];
   }
 }
+
+
+// Rotates a weakening red dot around the NeoPixel ring
+void rotateWeakeningRedDot(int wait) {
+  static uint16_t currentPixel = 0;
+  static uint8_t intensity = 255;
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 200;
+  
+  // Set the current pixel to red with current intensity
+  strip.setPixelColor(currentPixel, strip.Color(intensity, 0, 0));
+  
+  // Set the next pixels with decreasing intensity
+  for (int i = 1; i < NEOPIXEL_COUNT; i++) {
+    uint16_t pixel = (currentPixel - i + pixelNumber) % pixelNumber;
+    // uint8_t fadeIntensity = intensity * (NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT;
+    float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
+    uint8_t fadeIntensity = round(intensity * fadeRatio);
+    if (fadeIntensity > 0) {
+      strip.setPixelColor(pixel, strip.Color(fadeIntensity, 0, 0));
+    } else {
+      break;  // Stop if intensity reaches 0
+    }
+  }
+  
+  // Move to next pixel
+  currentPixel = (currentPixel + 1) % pixelNumber;
+}
+
+
+// Creates a pulsating effect on each pixel independently
+void pulsatingPixels(int wait) {
+  static uint8_t pixelIntensities[NEOPIXEL_COUNT];
+  static int8_t pixelDirections[NEOPIXEL_COUNT];
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 200;
+  
+  // Initialize intensities and directions if not done
+  static bool initialized = false;
+  if (!initialized) {
+    for (int i = 0; i < pixelNumber; i++) {
+      pixelIntensities[i] = random(256);  // Start with random intensities
+      pixelDirections[i] = random(2) * 2 - 1;  // Either 1 or -1
+    }
+    initialized = true;
+  }
+  
+  // Update and set the intensity for each pixel
+  for (int i = 0; i < pixelNumber; i++) {
+    // Update intensity
+    pixelIntensities[i] += pixelDirections[i] * 5;  // Adjust 5 to change speed
+    
+    // Change direction if at max or min
+    if (pixelIntensities[i] >= 255 || pixelIntensities[i] <= 0) {
+      pixelDirections[i] *= -1;
+      pixelIntensities[i] = constrain(pixelIntensities[i], 0, 255);
+    }
+    
+    // Set the pixel color (using red in this example)
+    strip.setPixelColor(i, strip.Color(pixelIntensities[i], 0, 0));
+  }
+  
+  strip.show();
+}
+
+// Creates a uniform fading effect on all pixels
+void uniformFading(uint32_t color, int wait) {
+  static uint8_t intensity = 0;
+  static int8_t direction = 1;
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 200;
+  
+  // Update intensity
+  intensity += direction * 3;  // Adjust 5 to change fade speed
+  
+  // Change direction if at max or min
+  if (intensity >= 255 || intensity <= 0) {
+    direction *= -1;
+    intensity = constrain(intensity, 0, 255);
+  }
+  
+  // Extract RGB components from the color argument
+  uint8_t r = (color >> 16) & 0xFF;
+  uint8_t g = (color >> 8) & 0xFF;
+  uint8_t b = color & 0xFF;
+  
+  // Set all pixels to the same intensity, using the color argument
+  for (int i = 0; i < pixelNumber; i++) {
+    uint8_t fadedR = (r * intensity) / 255;
+    uint8_t fadedG = (g * intensity) / 255;
+    uint8_t fadedB = (b * intensity) / 255;
+    strip.setPixelColor(i, strip.Color(fadedR, fadedG, fadedB));
+  }
+  
+  strip.show();
+}
+
+// Fill strip pixels one after another with a color. Strip is NOT cleared
+// first; anything there will be covered pixel by pixel. Pass in color
+// (as a single 'packed' 32-bit value, which you can get by calling
+// strip.Color(red, green, blue) as shown in the loop() function above),
+// and a delay time (in milliseconds) between pixels.
+void colorWipe(uint32_t color, int wait) {
+  static uint16_t current_pixel = 0;
+  pixelInterval = wait;                        //  Update delay time
+  strip.setPixelColor(current_pixel++, color); //  Set pixel's color (in RAM)
+  strip.show();                                //  Update strip to match
+  if(current_pixel >= pixelNumber) {           //  Loop the pattern from the first LED
+    current_pixel = 0;
+    patternComplete = true;
+  }
+}
+
 
 // Theater-marquee-style chasing lights. Pass in a color (32-bit value,
 // a la strip.Color(r,g,b) as mentioned above), and a delay time (in ms)
