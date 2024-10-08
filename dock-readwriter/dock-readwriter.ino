@@ -531,7 +531,7 @@ void runLEDPatterns() {
         fadeTraitColors(20);  // Adjust the wait time as needed
         break;
       case LED_PATTERN_ORB_CONNECTED:
-        rotateWeakeningRedDot(100);
+        rotateWeakeningRedDotWithPulse(100);
         break;
       case LED_PATTERN_ORB_READING:
         theaterChase(strip.Color(0, 255, 0), 100);
@@ -614,6 +614,45 @@ void rotateWeakeningRedDot(int wait) {
     uint8_t fadeIntensity = round(intensity * fadeRatio);
     if (fadeIntensity > 0) {
       strip.setPixelColor(pixel, strip.Color(fadeIntensity, 0, 0));
+    } else {
+      break;  // Stop if intensity reaches 0
+    }
+  }
+  
+  // Move to next pixel
+  currentPixel = (currentPixel + 1) % pixelNumber;
+}
+
+
+// Rotates a weakening red dot around the NeoPixel ring
+void rotateWeakeningRedDotWithPulse(int wait) {
+  static uint16_t currentPixel = 0;
+  static uint8_t intensity = 255;
+  static uint8_t globalIntensity = 0;
+  static int8_t globalDirection = 1;
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 200;
+  
+  // Update global intensity
+  globalIntensity += globalDirection * 5;  // Adjust 2 to change global fade speed
+  if (globalIntensity >= 255 || globalIntensity <= 30) {
+    globalDirection *= -1;
+    globalIntensity = constrain(globalIntensity, 30, 255);
+  }
+  
+  // Set the current pixel to red with current intensity
+  uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
+  strip.setPixelColor(currentPixel, strip.Color(adjustedIntensity, 0, 0));
+  
+  // Set the next pixels with decreasing intensity
+  for (int i = 1; i < NEOPIXEL_COUNT; i++) {
+    uint16_t pixel = (currentPixel - i + pixelNumber) % pixelNumber;
+    float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
+    uint8_t fadeIntensity = round(intensity * fadeRatio);
+    adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
+    if (adjustedIntensity > 0) {
+      strip.setPixelColor(pixel, strip.Color(adjustedIntensity, 0, 0));
     } else {
       break;  // Stop if intensity reaches 0
     }
