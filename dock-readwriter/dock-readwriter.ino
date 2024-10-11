@@ -909,9 +909,9 @@ void detectButton() {
     // If the state has changed, a button is likely connected
     if (initialState != currentState) {
         buttonDetected = true;
-        Serial.println("Button detected");
+        Serial.println("Button detected - Can write to Orb");
     } else {
         buttonDetected = false;
-        Serial.println("No button detected");
+        Serial.println("No button detected - won't try to write to Orb");
     }
 }
