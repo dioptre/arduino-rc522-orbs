@@ -2,6 +2,7 @@
 ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL MICROCONTROLLERS VIA USB
 
  IMPORTANT: Only connect to 3.3v, NEVER 5v
+ IMPORTANT: Set HAS_WRITE_BUTTON to false if you don't have a button in your setup
  
 For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
 
@@ -67,18 +68,9 @@ TODO:
 #if defined(ARDUINO_AVR_NANO) || defined(ARDUINO_AVR_UNO)
     #define SS_PIN          10                  // SDA pin for Arduino Nano/Uno
     #define RST_PIN         9                   // RST pin for Arduino Nano/Uno
-    #define SCK_PIN         13                  // SCK pin for Arduino Nano/Uno
-    #define MOSI_PIN        11                  // MOSI pin for Arduino Nano/Uno
-    #define MISO_PIN        12                  // MISO pin for Arduino Nano/Uno
 #elif defined(ARDUINO_AVR_MEGA2560)
     #define SS_PIN          9                   // SDA pin for Arduino Mega
     #define RST_PIN         8                   // RST pin for Arduino Mega
-    #define SCK_PIN         52                  // SCK pin for Arduino Mega
-    #define MOSI_PIN        51                  // MOSI pin for Arduino Mega
-    #define MISO_PIN        50                  // MISO pin for Arduino Mega
-    #define LED_BUILTIN     13                  // Arduino LED pin
-    #define LED_SHIELD      11                  // Protoshield LED pin
-    #define BUTTON          2                   // Protoshield button pin 
 #else
     #error "Unsupported board. Please define pin constants for your specific board."
 #endif
@@ -88,9 +80,10 @@ TODO:
 #define LED_SHIELD      11                  // Protoshield LED pin
 
 // Button constants
-#define BUTTON              2                   // Button pin 
+#define BUTTON              2               // Button pin 
 #define PRESSED LOW
 #define RELEASED HIGH
+bool buttonDetected = false;                // Tracks if a button is detected on startup
 
 // NeoPixel LED ring
 #define NEOPIXEL_PIN    6                   // NeoPixel pin
@@ -200,6 +193,9 @@ void setup() {
   digitalWrite(LED_SHIELD, LOW);
   pinMode(BUTTON, INPUT_PULLUP);
 
+  // Detect if a button is connected
+  detectButton();
+
   // Initialize NeoPixel LED ring
   strip.begin();                        // Initialize NeoPixel strip object
   strip.show();                         // Turn OFF all pixels ASAP
@@ -277,7 +273,8 @@ void loop() {
     // Run NeoPixel LED ring patterns
     runLEDPatterns();
 
-    if (digitalRead(BUTTON) == PRESSED) {
+    // Only check the button if it was detected
+    if (buttonDetected && digitalRead(BUTTON) == PRESSED) {
       // Update stations
       int updateStationsStatus = updateStations();
       if (updateStationsStatus == STATUS_FAILED) {
@@ -896,4 +893,25 @@ void flashLED() {
   delay(50);
   digitalWrite(LED_SHIELD, HIGH);
   delay(50);
+}
+
+// Add this function to detect if a button is connected
+void detectButton() {
+    // Read the initial state
+    int initialState = digitalRead(BUTTON);
+    
+    // Wait a short time
+    delay(50);
+    
+    // Read the state again
+    int currentState = digitalRead(BUTTON);
+    
+    // If the state has changed, a button is likely connected
+    if (initialState != currentState) {
+        buttonDetected = true;
+        Serial.println("Button detected");
+    } else {
+        buttonDetected = false;
+        Serial.println("No button detected");
+    }
 }
