@@ -895,23 +895,41 @@ void flashLED() {
   delay(50);
 }
 
-// Add this function to detect if a button is connected
+
+// Detect if the button is pressed
 void detectButton() {
-    // Read the initial state
-    int initialState = digitalRead(BUTTON);
-    
-    // Wait a short time
-    delay(50);
-    
-    // Read the state again
-    int currentState = digitalRead(BUTTON);
-    
-    // If the state has changed, a button is likely connected
-    if (initialState != currentState) {
+    const int numReadings = 100;
+    const int delayBetweenReadings = 1;
+    int stableCount = 0;
+    int changeCount = 0;
+    int lastState = -1;
+
+    // Enable internal pull-up resistor
+    pinMode(BUTTON, INPUT_PULLUP);
+
+    for (int i = 0; i < numReadings; i++) {
+        int currentState = digitalRead(BUTTON);
+        
+        if (lastState == -1) {
+            lastState = currentState;
+        } else if (currentState == lastState) {
+            stableCount++;
+        } else {
+            changeCount++;
+        }
+        
+        lastState = currentState;
+        delay(delayBetweenReadings);
+    }
+
+    if (changeCount > 5) {
         buttonDetected = true;
-        Serial.println("Button detected - Can write to Orb");
+        Serial.println("Button detected (with bounce)");
+    } else if (stableCount == numReadings - 1) {
+        buttonDetected = true;
+        Serial.println("Button detected (stable state)");
     } else {
         buttonDetected = false;
-        Serial.println("No button detected - won't try to write to Orb");
+        Serial.println("No button detected");
     }
 }
