@@ -1,29 +1,51 @@
-/* Orb Dock Reader
- * 
- *   RFID-RC522 (SPI connexion)
- *   
- *   CARD RC522      Arduino (UNO)
- *     SDA  -----------  10 (Configurable, see SS_PIN constant)
- *     SCK  -----------  13
- *     MOSI -----------  11
- *     MISO -----------  12
- *     IRQ  -----------  
- *     GND  -----------  GND
- *     RST  -----------  9 (onfigurable, see RST_PIN constant)
- *     3.3V ----------- 3.3V
- *     
+/* 
+ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL MICROCONTROLLERS VIA USB
 
-Can store information for up to 16 stations.
+ IMPORTANT: Only connect to 3.3v, NEVER 5v
+ 
+For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
+
+PIN CONNECTIONS 
+
+RC522 RFID READER: 
+  ARDUINO NANO/UNO:
+  - SDA (SS) -> Digital 10
+  - SCK -> Digital 13
+  - MOSI -> Digital 11
+  - MISO -> Digital 12
+  - IRQ -> Unconnected
+  - GND -> GND
+  - RST -> Digital 9
+  - 3.3V -> 3.3V
+  
+  ARDUINO MEGA:
+  - SDA (SS) -> Digital 9
+  - SCK -> Digital 52
+  - MOSI -> Digital 51
+  - MISO -> Digital 50
+  - IRQ -> Unconnected
+  - GND -> GND
+  - RST -> Digital 8
+  - 3.3V -> 3.3V
+  
+NEOPIXEL RING:
+ - Data out -> Digital 6
+
+ADDITIONAL CONNECTIONS (OPTIONAL):
+ - LED_SHIELD -> Digital 11 (for both Nano/Uno and Mega)
+ - BUTTON -> Digital 2 (for both Nano/Uno and Mega)
+
+
+STATIONS
+Can store information for up to 16 stations. (NOTE: May change this to 10 so we only need 1 page per station)
 For each station: Visited yes/no, and Energy 0-255
-
-Stations:
-0 - Control console - CONSOLE
-1 - Thought Distiller - DISTILLER
-2 - Casino - CASINO
-3 - Forest - FOREST
-4 - Alchemization Station - ALCHEMY
-5 - Pipes - PIPES
-6 - ?
+  0 - Control console - CONSOLE
+  1 - Thought Distiller - DISTILLER
+  2 - Casino - CASINO
+  3 - Forest - FOREST
+  4 - Alchemization Station - ALCHEMY
+  5 - Pipes - PIPES
+  6 - Init/reset station
 
 TODO:
 - Add a way to set the orb's trait
@@ -41,14 +63,32 @@ TODO:
 #include <Adafruit_NeoPixel.h>
 
 
-// Pin constants
-#define SS_PIN          9                   // SPI pin - Change for nano vs mega etc
-#define RST_PIN         8                   // Reset pin - Change for nano vs mega etc
+// Pin constants for RC522 RFID Reader for Arduino Nano/Uno and Arduino Mega
+#if defined(ARDUINO_AVR_NANO) || defined(ARDUINO_AVR_UNO)
+    #define SS_PIN          10                  // SDA pin for Arduino Nano/Uno
+    #define RST_PIN         9                   // RST pin for Arduino Nano/Uno
+    #define SCK_PIN         13                  // SCK pin for Arduino Nano/Uno
+    #define MOSI_PIN        11                  // MOSI pin for Arduino Nano/Uno
+    #define MISO_PIN        12                  // MISO pin for Arduino Nano/Uno
+#elif defined(ARDUINO_AVR_MEGA2560)
+    #define SS_PIN          9                   // SDA pin for Arduino Mega
+    #define RST_PIN         8                   // RST pin for Arduino Mega
+    #define SCK_PIN         52                  // SCK pin for Arduino Mega
+    #define MOSI_PIN        51                  // MOSI pin for Arduino Mega
+    #define MISO_PIN        50                  // MISO pin for Arduino Mega
+    #define LED_BUILTIN     13                  // Arduino LED pin
+    #define LED_SHIELD      11                  // Protoshield LED pin
+    #define BUTTON          2                   // Protoshield button pin 
+#else
+    #error "Unsupported board. Please define pin constants for your specific board."
+#endif
+
+// Status LED constants
 #define LED_BUILTIN     13                  // Arduino LED pin
 #define LED_SHIELD      11                  // Protoshield LED pin
-#define BUTTON          2                   // Protoshield button pin 
 
 // Button constants
+#define BUTTON              2                   // Button pin 
 #define PRESSED LOW
 #define RELEASED HIGH
 
