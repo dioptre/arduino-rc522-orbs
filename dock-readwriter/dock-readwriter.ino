@@ -895,41 +895,17 @@ void flashLED() {
   delay(50);
 }
 
-
 // Detect if the button is pressed
 void detectButton() {
-    const int numReadings = 100;
-    const int delayBetweenReadings = 1;
-    int stableCount = 0;
-    int changeCount = 0;
-    int lastState = -1;
-
     // Enable internal pull-up resistor
     pinMode(BUTTON, INPUT_PULLUP);
 
-    for (int i = 0; i < numReadings; i++) {
-        int currentState = digitalRead(BUTTON);
-        
-        if (lastState == -1) {
-            lastState = currentState;
-        } else if (currentState == lastState) {
-            stableCount++;
-        } else {
-            changeCount++;
-        }
-        
-        lastState = currentState;
-        delay(delayBetweenReadings);
-    }
-
-    if (changeCount > 5) {
-        buttonDetected = true;
-        Serial.println("Button detected (with bounce)");
-    } else if (stableCount == numReadings - 1) {
-        buttonDetected = true;
-        Serial.println("Button detected (stable state)");
-    } else {
+    // Check if button is high (not pressed, due to pull-up)
+    if (digitalRead(BUTTON) == HIGH) {
         buttonDetected = false;
         Serial.println("No button detected");
+    } else {
+        buttonDetected = true;
+        Serial.println("Button detected");
     }
 }
