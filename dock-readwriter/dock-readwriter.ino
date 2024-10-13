@@ -1,33 +1,22 @@
 /* 
 ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL MICROCONTROLLERS VIA USB
 
- IMPORTANT: Only connect to 3.3v, NEVER 5v
- IMPORTANT: Set HAS_WRITE_BUTTON to false if you don't have a button in your setup
- 
 For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
+
+TROUBLESHOOTING:
+IMPORTANT - remember to set the switches on the PN532 to the "SPI" position - left down, right up
+IMPORTANT - remember to set Arduino IDE's Serial Monitor baud rate to 115200
 
 PIN CONNECTIONS 
 
 RC522 RFID READER: 
-  ARDUINO NANO/UNO:
-  - SDA (SS) -> Digital 10
-  - SCK -> Digital 13
-  - MOSI -> Digital 11
-  - MISO -> Digital 12
-  - IRQ -> Unconnected
-  - GND -> GND
-  - RST -> Digital 9
-  - 3.3V -> 3.3V
-  
-  ARDUINO MEGA:
-  - SDA (SS) -> Digital 9
-  - SCK -> Digital 52
-  - MOSI -> Digital 51
-  - MISO -> Digital 50
-  - IRQ -> Unconnected
-  - GND -> GND
-  - RST -> Digital 8
-  - 3.3V -> 3.3V
+  - ARDUINO NANO/UNO:
+    - 5V -> 5V
+    - GND -> GND
+    - SCK  -> Digital 2
+    - MOSI -> Digital 3
+    - SS   -> Digital 4
+    - MISO -> Digital 5
   
 NEOPIXEL RING:
  - Data out -> Digital 6
@@ -35,7 +24,6 @@ NEOPIXEL RING:
 ADDITIONAL CONNECTIONS (OPTIONAL):
  - LED_SHIELD -> Digital 11 (for both Nano/Uno and Mega)
  - BUTTON -> Digital 2 (for both Nano/Uno and Mega)
-
 
 STATIONS
 Can store information for up to 16 stations. (NOTE: May change this to 10 so we only need 1 page per station)
@@ -59,31 +47,21 @@ TODO:
 */
 
 
+#include <Wire.h>
 #include <SPI.h>
-#include <MFRC522.h>
+#include <Adafruit_PN532.h>
 #include <Adafruit_NeoPixel.h>
 
 
-// Pin constants for RC522 RFID Reader for Arduino Nano/Uno and Arduino Mega
-#if defined(ARDUINO_AVR_NANO) || defined(ARDUINO_AVR_UNO)
-    #define SS_PIN          10                  // SDA pin for Arduino Nano/Uno
-    #define RST_PIN         9                   // RST pin for Arduino Nano/Uno
-#elif defined(ARDUINO_AVR_MEGA2560)
-    #define SS_PIN          9                   // SDA pin for Arduino Mega
-    #define RST_PIN         8                   // RST pin for Arduino Mega
-#else
-    #error "Unsupported board. Please define pin constants for your specific board."
-#endif
-
 // Status LED constants
 #define LED_BUILTIN     13                  // Arduino LED pin
-#define LED_SHIELD      11                  // Protoshield LED pin
 
 // Button constants
 #define BUTTON              2               // Button pin 
 #define PRESSED LOW
 #define RELEASED HIGH
 bool buttonDetected = false;                // Tracks if a button is detected on startup
+int buttonState = 0;
 
 // NeoPixel LED ring
 #define NEOPIXEL_PIN    6                   // NeoPixel pin
@@ -116,24 +94,26 @@ enum LEDPattern {
 LEDPattern currentLEDPattern = LED_PATTERN_NO_ORB;
 
 // Status constants
+#define STATUS_FAILED    0
 #define STATUS_SUCCEEDED 1
-#define STATUS_FAILED 2
-#define STATUS_FALSE 3
-#define STATUS_TRUE 4
+#define STATUS_FALSE     2
+#define STATUS_TRUE    3
 
 // Stations
-#define NUM_STATIONS 16
-#define NUM_STATIONS_PRINT 6 // Temporary
+// Station IDs. "CONSOLE" is station 0, "DISTILLER" is station 1, etc.
+const char* stationIDs[] = {
+  "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST", "ALCHEMY", "PIPES", "CHECKER", "SLERP", 
+  "RETOXIFY", "GENERATOR", "STRING", "CHILL", "HUNT"
+};
+#define NUM_STATIONS (sizeof(stationIDs) / sizeof(stationIDs[0]))
 struct Station {
   bool visited;
   byte energy;
+  byte custom1;
+  byte custom2;
 };
-Station stations[NUM_STATIONS];
-int totalStationEnergy = 0;
-const char* stationIDs[NUM_STATIONS] = {
-  "CONSOLE", "DISTILLER", "CASINO", "FOREST", "ALCHEMY", "PIPES",
-  "TBD 7", "TBD 8", "TBD 9", "TBD 10", "TBD 11", "TBD 12", "TBD 13", "TBD 14", "TBD 15", "TBD 16"
-};
+Station stations[NUM_STATIONS]; // Array of stations
+int totalStationEnergy = 0;     // How much energy the orb has from all stations combined
 
 // Orb Traits
 #define NUM_TRAITS 5
@@ -152,28 +132,37 @@ const uint32_t traitColors[] = {
 };
 char trait[5] = "RUMI";
 
-// NFC/RFID Reader
-MFRC522 rfid(SS_PIN, RST_PIN);              // Create MFRC522 instance
-MFRC522::StatusCode status;                 // Variable to get card status
-#define maxRetries      10                  // Number of retries for failed read/write operations
-#define retryDelay      200                 // Delay between retries in milliseconds
-#define DELAY_AFTER_CARD_PRESENT 1000       // Delay after card is presented
+// NFC/RFID Reader - PN532 with software SPI
+#define PN532_SCK  (2)
+#define PN532_MOSI (3)
+#define PN532_SS   (4)
+#define PN532_MISO (5)
+Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
+
+// Communication constants
+#define MAX_RETRIES      4                    // Number of retries for failed read/write operations
+#define RETRY_DELAY      1                    // Delay between retries in milliseconds - set low b'cos PN532 lib seems to need us to re-connect the card which itself has some delay
+#define DELAY_AFTER_CARD_PRESENT 300          // Delay after card is presented
+#define NFC_CHECK_INTERVAL 1000               // How often to check for NFC presence
 
 // NFC/RFID Communication
-// Ultralight memory is 16 pages. 4 bytes per page.  
-// Pages 0 to 4 are reserved for special functions.
-// Page 6 contains the word "ORBS" so we can verify the NFC has been configured as an orb.
-// Page 7 contains the orb's trait.
-// Pages 8 to 16 contain the station information.
-byte buffer[4 * (2 + NUM_STATIONS / 2)];      // Data transfer buffer
-#define BUFFER_SIZE sizeof(buffer)            // Size of the buffer
-#define NUM_PAGES (BUFFER_SIZE / 4)           // Number of pages to use
-#define PAGE_OFFSET (0x10 - NUM_PAGES)        // Page offset for read/write start
+// NTAG213 has pages 4-39 available for user memory (144 bytes, 36 pages) 4 bytes per page.  
+// Pages 0 to 3 are reserved for special functions.
+// Page 4 contains the word "ORBS" so we can verify the NFC has been configured as an orb.
+// Page 5 contains the orb's TRAIT.
+// Pages 6 to 39 contain the STATION information.
+byte page_buffer[4];                         // Buffer for a single page
+//byte full_buffer[4 * (2 + NUM_STATIONS)];     // Data transfer buffer
+//#define BUFFER_SIZE sizeof(buffer)            // Size of the buffer
+//#define NUM_PAGES (BUFFER_SIZE / 4)           // Number of pages to use
 const char header[] = "ORBS";                 // Header to check if the NFC has been initialized as an orb
-#define STATION_PAGE_OFFSET (PAGE_OFFSET + 2)
+#define PAGE_OFFSET 4                         // Page offset for read/write start
+#define ORBS_PAGE (PAGE_OFFSET + 0)           // Page for the ORBS header 
+#define TRAIT_PAGE (PAGE_OFFSET + 1)          // Page for the trait
+#define STATIONS_PAGE_OFFSET (PAGE_OFFSET + 2) // Page offset for the station data
 
-// Button state
-int buttonState = 0;
+// Timing orchestration
+unsigned long currentMillis;
 
 
 /********************** SETUP *****************************/
@@ -181,17 +170,10 @@ int buttonState = 0;
 void setup() {
 
    // Initialize serial communications and wait for serial port to open (for Arduinos based on ATMEGA32U4)
-  Serial.begin(9600);
-  while (!Serial) {}
+  Serial.begin(115200);
+  while (!Serial) delay(10);
 
-  // Initialize LEDs and button
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  pinMode(LED_SHIELD, OUTPUT);
-  digitalWrite(LED_SHIELD, LOW);
-  pinMode(BUTTON, INPUT_PULLUP);
-
-  // Detect if a button is connected
+  // Detect if a button is connected and initialize if so
   detectButton();
 
   // Initialize NeoPixel LED ring
@@ -199,44 +181,57 @@ void setup() {
   strip.show();                         // Turn OFF all pixels ASAP
   strip.setBrightness(pixelBrightness); // Set BRIGHTNESS to about 1/5 
 
-  // Initialize NFC reader
-  SPI.begin();                          // Init SPI bus
-  rfid.PCD_Init();                      // Init MFRC522 card  
-  delay(4);
-  Serial.print("MFRC522 software version = ");
-  Serial.println(rfid.PCD_ReadRegister(rfid.VersionReg), HEX);
-  rfid.PCD_DumpVersionToSerial();       // Show details of PCD - MFRC522 Card Reader details
-  Serial.println("PUT YOUR ORBS IN MEEEEE");
+  // Initialize PN532 NFC module
+  nfc.begin();
+  uint32_t versiondata = nfc.getFirmwareVersion();
+  if (!versiondata) {
+    Serial.println("Didn't find PN532 module, won't start.");
+    while (1);                          // Halt the program if PN532 isn't found
+  }
+  nfc.SAMConfig();                      // Configure the PN532 to read RFID tags
+
+  // Turn off the status LED
+  digitalWrite(LED_BUILTIN, LOW);
+
+  // Ready!
+  Serial.println("INSERT YOUR ORBS IN MEEEEE");
 }
 
 
 /********************** LOOP *****************************/
 
 void loop() {
+  static unsigned long lastNFCCheckTime = 0;
+  currentMillis = millis();
 
   // Run NeoPixel LED ring patterns
   runLEDPatterns();
 
-  // Wait for a new card and select the card
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial())
+  // Check for NFC presence periodically
+  if (currentMillis - lastNFCCheckTime < NFC_CHECK_INTERVAL) {
     return;
+  }
+  lastNFCCheckTime = currentMillis;
+  if (!isNFCPresent()) {
+    Serial.print(".");
+    return;
+  }
 
-  // Turn on status LED
-  digitalWrite(LED_SHIELD, HIGH);
+  // We have an NFC card present, turn on the status LED
+  digitalWrite(LED_BUILTIN, HIGH);
 
-  // Wait for NFC to get closer
-  // delay(DELAY_AFTER_CARD_PRESENT);
+  // Wait for NFC to get closer just in case
+  delay(DELAY_AFTER_CARD_PRESENT);
 
   // If the NFC has not been configured as an orb, do so
+  // TODO: Add a way to set the orb's trait
   int checkORBSStatus = checkORBS();
   if (checkORBSStatus == STATUS_FAILED) {
-    printDebugInfo();
     return;
   }
   if (checkORBSStatus == STATUS_FALSE) {
-    int resetOrbStatus = resetOrb();
+    int resetOrbStatus = resetOrb();      
     if (resetOrbStatus == STATUS_FAILED) {
-      printDebugInfo();
       return;
     }
   }
@@ -244,7 +239,6 @@ void loop() {
   // Read the station's information
   int readStationsStatus = readStations();
   if (readStationsStatus == STATUS_FAILED) {
-    printDebugInfo();
     return;
   }
 
@@ -267,16 +261,26 @@ void loop() {
   // ...   - [energy]
   // ...   - [trait]
 
-  while (isNFCActive()) {
+  // TODO: Can we merge this with the main loop instead of having a separate while loop?
+  bool orbActive = true;
+  while (orbActive) {
+    currentMillis = millis();
+
+    // Check for NFC presence periodically
+    if (currentMillis - lastNFCCheckTime > NFC_CHECK_INTERVAL) {
+      orbActive = isNFCActive();
+      lastNFCCheckTime = currentMillis;
+      continue;
+    }
+
     // Run NeoPixel LED ring patterns
     runLEDPatterns();
 
-    // Only check the button if it was detected
+    // Check the button if one was detected
     if (buttonDetected && digitalRead(BUTTON) == PRESSED) {
-      // Update stations
-      int updateStationsStatus = updateStations();
+      // Update stations - just a test for now
+      int updateStationsStatus = testUpdateStations();
       if (updateStationsStatus == STATUS_FAILED) {
-        printDebugInfo();
         break;  // Exit the loop if update fails
       }
       readStations();
@@ -286,25 +290,20 @@ void loop() {
         delay(50);
       }
     }
-    
-    // Small delay to prevent excessive CPU usage
-    // TODO: Change this to non-blocking
-    //delay(250);
   }
 
+  // ORB DISCONNECTED
   // Reset various variables so they don't polluate other orbs
   Serial.println("Orb disconnected, ending session...");
   // TODO: Send a signal to the attached Raspberry Pi that orb has disconnected
   currentLEDPattern = LED_PATTERN_NO_ORB;
-  memset(buffer, 0, sizeof(buffer));
+  //memset(full_buffer, 0, sizeof(full_buffer));
+  memset(page_buffer, 0, sizeof(page_buffer));
   initializeStations();
   totalStationEnergy = 0;
 
   // turn the LED off
-  digitalWrite(LED_SHIELD, LOW);
-
-  // Halt PICC
-  rfid.PICC_HaltA();
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 
@@ -336,23 +335,35 @@ void initializeStations() {
 // Write station information and trait to orb
 int writeStations() {
 
+  int writeDataStatus;
+
   Serial.println("Writing stations to orb...");
 
   // Write header to the first page and trait to the second page
-  memcpy(buffer, header, 4);
-  memcpy(buffer + 4, trait, 4);
-
-  // Start writing station data from the 5th byte (index 4)
-  for (int i = 0; i < NUM_STATIONS; i++) {
-    buffer[8 + i*2] = stations[i].visited ? 1 : 0;
-    buffer[8 + i*2 + 1] = stations[i].energy;
-  }
-
-  int writeDataStatus = writeData();
+  // TODO: Check return status
+  memcpy(page_buffer, header, 4);
+  writeDataStatus = writePage(ORBS_PAGE, page_buffer);
   if (writeDataStatus == STATUS_FAILED) {
-      Serial.println("Failed to write stations to orb");
-      return STATUS_FAILED;
+    return STATUS_FAILED;
   }
+  memcpy(page_buffer, trait, 4);
+  writeDataStatus = writePage(TRAIT_PAGE, page_buffer);
+  if (writeDataStatus == STATUS_FAILED) {
+    return STATUS_FAILED;
+  }
+
+  // Write station data
+  for (int i = 0; i < NUM_STATIONS; i++) {
+    page_buffer[0] = stations[i].visited ? 1 : 0;
+    page_buffer[1] = stations[i].energy;
+    page_buffer[2] = stations[i].custom1;
+    page_buffer[3] = stations[i].custom2;
+    writeDataStatus = writePage(STATIONS_PAGE_OFFSET + i, page_buffer);
+    if (writeDataStatus == STATUS_FAILED) {
+      return STATUS_FAILED;
+    }
+  }
+
   return STATUS_SUCCEEDED;
 }
 
@@ -361,22 +372,27 @@ int writeStations() {
 int readStations() {
 
   Serial.println("Reading trait and station information from orb...");
-  int readDataStatus = readData();
-  if (readDataStatus == STATUS_FAILED) {
-    Serial.println(F("Failed to read trait and station information from orb"));
-    return STATUS_FAILED;
+  totalStationEnergy = 0;
+  for (int i = 0; i < NUM_STATIONS; i++) {
+    int readDataStatus = readPage(STATIONS_PAGE_OFFSET + i);
+    if (readDataStatus == STATUS_FAILED) {
+      Serial.println(F("Failed to read trait and station information from orb"));
+      return STATUS_FAILED;
+    }
+    stations[i].visited = page_buffer[0] == 1;
+    stations[i].energy = page_buffer[1];
+    stations[i].custom1 = page_buffer[2];
+    stations[i].custom2 = page_buffer[3];
+    totalStationEnergy += stations[i].energy;
   }
 
   // Read the trait from the second page
-  memcpy(trait, buffer + 4, 4);
-
-  // Read the station information from the third page onwards
-  totalStationEnergy = 0;
-  for (int i = 0; i < NUM_STATIONS; i++) {
-    stations[i].visited = buffer[STATION_PAGE_OFFSET + i*2] == 1;
-    stations[i].energy = buffer[STATION_PAGE_OFFSET + i*2 + 1];
-    totalStationEnergy += stations[i].energy;
+  int readTraitStatus = readPage(TRAIT_PAGE);
+  if (readTraitStatus == STATUS_FAILED) {
+    Serial.println(F("Failed to read trait from orb"));
+    return STATUS_FAILED;
   }
+  memcpy(trait, page_buffer, 4);
 
   printStations();
 
@@ -387,12 +403,13 @@ int readStations() {
 // Print station information
 void printStations() {
 
+  Serial.println("");
   Serial.println(F("*************************************************"));
   Serial.print(F("Trait: "));
   Serial.println(trait);
   Serial.print(F("Total energy: "));
   Serial.println(totalStationEnergy);
-  for (int i = 0; i < NUM_STATIONS_PRINT; i++) {
+  for (int i = 0; i < NUM_STATIONS; i++) {
     Serial.print(stationIDs[i]);
     Serial.print(F(": Visited:"));
     Serial.print(stations[i].visited ? "Yes" : "No");
@@ -410,13 +427,13 @@ void printStations() {
 int checkORBS() {
 
   Serial.println("Checking for ORBS header...");
-  int readDataStatus = readData();
+  int readDataStatus = readPage(ORBS_PAGE);
   if (readDataStatus == STATUS_FAILED) {
     Serial.println(F("Failed to read data from NFC"));
     return STATUS_FAILED;
   }
 
-  if (memcmp(buffer, header, 4) == 0) {
+  if (memcmp(page_buffer, header, 4) == 0) {
     Serial.println(F("ORBS header found"));
     return STATUS_TRUE;
   }
@@ -426,8 +443,8 @@ int checkORBS() {
 }
 
 
-// TODO: Take parameters for station and energy to update
-int updateStations() {
+// Test purposes only -- update the station with the lowest energy
+int testUpdateStations() {
 
   // Add one energy to the station with the lowest energy
   int lowestEnergyStation = 0;
@@ -436,47 +453,52 @@ int updateStations() {
       lowestEnergyStation = i;
     }
   }
-  stations[lowestEnergyStation].energy++;
-  stations[lowestEnergyStation].energy++;
-  stations[lowestEnergyStation].energy++;
+  stations[lowestEnergyStation].energy += 3;
   stations[lowestEnergyStation].visited = true;
-  int writeStationsStatus = writeStations();
-  if (writeStationsStatus == STATUS_FAILED) {
-    Serial.println("Failed to update stations");
+  int writeStationStatus = writeStation(lowestEnergyStation);
+  if (writeStationStatus == STATUS_FAILED) {
+    Serial.println("Failed to update station");
     return STATUS_FAILED;
   }
   return STATUS_SUCCEEDED;
 }
 
-// Writes whatever is in the buffer to the NFC
-int writeData() {
+
+int writeStation(int stationID) {
+
+  // Prepare the page buffer with station data
+  page_buffer[0] = stations[stationID].visited ? 1 : 0;
+  page_buffer[1] = stations[stationID].energy;
+  page_buffer[2] = stations[stationID].custom1;
+  page_buffer[3] = stations[stationID].custom2;
+
+  // Write the buffer to the NFC
+  int writeDataStatus = writePage(STATIONS_PAGE_OFFSET + stationID, page_buffer);
+  if (writeDataStatus == STATUS_FAILED) {
+    Serial.println("Failed to write station");
+    return STATUS_FAILED;
+  }
+  return STATUS_SUCCEEDED;
+}
+
+// Writes whatever is in the page_buffer to the NFC
+int writePage(int page, uint8_t* data) {
 
   int retryCount = 0;
 
-  while (retryCount < maxRetries) {
-    Serial.println(F("Writing data to NFC..."));
-    bool writeSuccess = true;
-
-    for (int i = 0; i < NUM_PAGES; i++) {
-      // Data is written in blocks of 4 bytes (i.e. one page)
-      status = (MFRC522::StatusCode) rfid.MIFARE_Ultralight_Write(PAGE_OFFSET+i, &buffer[i*4], 4);
-      if (status != MFRC522::STATUS_OK) {
-        Serial.print(F("Write to NFC failed: "));
-        Serial.println(rfid.GetStatusCodeName(status));
-        writeSuccess = false;
-        break;
-      }
-    }
-
+  while (retryCount < MAX_RETRIES) {
+    Serial.print(F("Writing data to NFC... page: "));
+    Serial.println(page);
+    bool writeSuccess = nfc.ntag2xx_WritePage(page, data);
     if (writeSuccess) {
       Serial.println(F("Write to NFC succeeded"));
       return STATUS_SUCCEEDED;
     }
-
     retryCount++;
-    if (retryCount < maxRetries) {
+    if (retryCount < MAX_RETRIES) {
       Serial.println(F("Retrying write operation."));
-      delay(retryDelay);
+      delay(RETRY_DELAY);
+      nfc.inListPassiveTarget(); // Seems like we need to do this to recover??
     }
   }
 
@@ -484,43 +506,24 @@ int writeData() {
   return STATUS_FAILED;
 }
 
-// Read whatever is in the NFC into buffer
-int readData() {
+// Read the given page from the NFC into page_buffer, with retries
+int readPage(int page) {
 
-  Serial.println(F("Reading data from NFC..."));
   int retryCount = 0;
 
-  while (retryCount < maxRetries) {
-    bool readSuccess = true;
-
-    // We need to read all pages starting from PAGE_OFFSET
-    for (int i = 0; i < NUM_PAGES; i++) {
-      byte pageBuffer[18];  // Increased buffer size for safety
-      byte bufferSize = sizeof(pageBuffer);
-      
-      status = (MFRC522::StatusCode) rfid.MIFARE_Read(PAGE_OFFSET + i, pageBuffer, &bufferSize);
-      if (status != MFRC522::STATUS_OK) {
-        Serial.print(F("Read from NFC failed: "));
-        Serial.println(rfid.GetStatusCodeName(status));
-        Serial.print(F("Page: "));
-        Serial.println(PAGE_OFFSET + i);
-        readSuccess = false;
-        break;
-      }
-      
-      // Copy only the first 4 bytes of the read data to the main buffer
-      memcpy(buffer + (i * 4), pageBuffer, 4);
-    }
+  while (retryCount < MAX_RETRIES) {
+    bool readSuccess = nfc.ntag2xx_ReadPage(page, page_buffer);
 
     if (readSuccess) {
-      Serial.println(F("Read from NFC succeeded"));
+      Serial.print(F("Read OK. "));
       return STATUS_SUCCEEDED;
     }
 
     retryCount++;
-    if (retryCount < maxRetries) {
+    if (retryCount < MAX_RETRIES) {
       Serial.println(F("Retrying read operation."));
-      delay(retryDelay);
+      delay(RETRY_DELAY);
+      nfc.inListPassiveTarget(); // Seems like we need to do this to recover??
     }
   }
 
@@ -529,25 +532,73 @@ int readData() {
 }
 
 
-// Check if the NFC is connected by reading the first 4 pages
-bool isNFCActive() {
+// Check if an NFC card is present
+bool isNFCPresent() {
+  if (!nfc.inListPassiveTarget()) {
+    return false;
+  }
 
-  // See if we can read the first 4 pages
-  byte tempBuffer[18];
-  byte tempBufferSize = sizeof(tempBuffer);
-  status = (MFRC522::StatusCode) rfid.MIFARE_Read(PAGE_OFFSET, tempBuffer, &tempBufferSize);
-  return status == MFRC522::STATUS_OK;
+  uint8_t success;
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
+  uint8_t uidLength;
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+  if (!success) {
+    Serial.println("Failed to read NFC tag");
+    return false;
+  }
+
+  if (uidLength != 7) {
+    Serial.println("Detected non-NTAG203 tag (UUID length != 7 bytes)!");
+    return false;
+  }
+
+  Serial.println("NFC tag read successfully");
+  return true;
 }
 
 
-// Dump debug info about the card; PICC_HaltA() is automatically called
+// Check if an Orb NFC is connected by reading the orb page
+bool isNFCActive() {
+
+  // See if we can read the orb page
+  int readPageStatus = readPage(ORBS_PAGE);
+  if (readPageStatus == STATUS_FAILED) {
+    return false;
+  }
+  return true;
+}
+
+
+// Print the entire contents of the NFC card
 void printDebugInfo() {
 
-  rfid.PICC_DumpToSerial(&(rfid.uid));
-  MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-  Serial.print(F("RFID Tag UID:"));
-  printHex(rfid.uid.uidByte, rfid.uid.size);
-  Serial.println("");
+  for (uint8_t i = 0; i < 42; i++) {
+    bool success = nfc.ntag2xx_ReadPage(i, page_buffer);
+
+    // Display the current page number
+    Serial.print("PAGE ");
+    if (i < 10)
+    {
+      Serial.print("0");
+      Serial.print(i);
+    }
+    else
+    {
+      Serial.print(i);
+    }
+    Serial.print(": ");
+
+    // Display the results, depending on 'success'
+    if (success)
+    {
+      // Dump the page data
+      nfc.PrintHexChar(page_buffer, 4);
+    }
+    else
+    {
+      Serial.println("Unable to read the requested page!");
+    }
+  }
 }
 
 
@@ -557,7 +608,6 @@ void printDebugInfo() {
 // Run the current NeoPixel LED ring pattern
 void runLEDPatterns() {
 
-  unsigned long currentMillis = millis();     // Tracks current time
   if (currentMillis - pixelPrevious >= pixelInterval) {
     pixelPrevious = currentMillis;  // Update the previous time
 
@@ -592,7 +642,6 @@ void runLEDPatterns() {
   if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= brightnessInterval) {
     brightnessPrevious = currentMillis;
     pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
-    Serial.println(pixelBrightness);
     strip.setBrightness(pixelBrightness);
     strip.show();
   }
@@ -607,8 +656,6 @@ void cycleTraitColors(int wait) {
   
   pixelInterval = wait;  // Update delay time
   targetBrightness = 255;
-
-  unsigned long currentMillis = millis();
 
   if (!colorChanged) {
     // Set all pixels to the current trait color
@@ -913,13 +960,13 @@ void printHex(byte *buffer, byte bufferSize) {
 
 // Flash the LED on the shield
 void flashLED() {
-  digitalWrite(LED_SHIELD, LOW);
+  digitalWrite(LED_BUILTIN, LOW);
   delay(50);
-  digitalWrite(LED_SHIELD, HIGH);
+  digitalWrite(LED_BUILTIN, HIGH);
   delay(50);
-  digitalWrite(LED_SHIELD, LOW);
+  digitalWrite(LED_BUILTIN, LOW);
   delay(50);
-  digitalWrite(LED_SHIELD, HIGH);
+  digitalWrite(LED_BUILTIN, HIGH);
   delay(50);
 }
 
