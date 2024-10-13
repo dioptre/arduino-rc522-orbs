@@ -136,23 +136,21 @@ const char* stationIDs[NUM_STATIONS] = {
 };
 
 // Orb Traits
-#define NUM_TRAITS 6
-#define TRAIT_NONE 0
+#define NUM_TRAITS 5
 const char* traits[] = {
-  "NONE", "RUMI", "SELF", "SHAM", "HOPE", "DISC"
+  "RUMI", "SELF", "SHAM", "HOPE", "DISC"
 };
 const char* traitNames[] = {
-  "None", "Rumination", "Self Doubt", "Shame Spiral", "Hopelessness", "Discontentment"
+  "Rumination", "Self Doubt", "Shame Spiral", "Hopelessness", "Discontentment"
 };
 const uint32_t traitColors[] = {
-  strip.Color(139, 0, 0),      // Dark red for NONE
-  strip.Color(255, 128, 0),    // Orange for RUMI (Rumination)
-  strip.Color(255, 220, 0),    // Warmer Yellow for SELF (Self Doubt)
-  strip.Color(0, 255, 0),      // Green for SHAM (Shame Spiral)
-  strip.Color(0, 0, 255),      // Blue for HOPE (Hopelessness)
-  strip.Color(200, 0, 180)     // Deeper Magenta for DISC (Discontentment)
+  strip.Color(255, 40, 0),      // Orange for RUMI (Rumination)
+  strip.Color(255, 0, 210),    // Pink/Magenta for DISC (Discontentment)
+  strip.Color(32, 255, 0),      // Green for SHAM (Shame Spiral)
+  strip.Color(255, 70, 0),      // Yellow for SELF (Self Doubt)
+  strip.Color(20, 0, 255),      // Blue for HOPE (Hopelessness)
 };
-char trait[5] = "NONE";
+char trait[5] = "RUMI";
 
 // NFC/RFID Reader
 MFRC522 rfid(SS_PIN, RST_PIN);              // Create MFRC522 instance
@@ -565,7 +563,7 @@ void runLEDPatterns() {
 
     switch (currentLEDPattern) {
       case LED_PATTERN_NO_ORB:
-        fadeTraitColors(20);  // Adjust the wait time as needed
+        fadeTraitColors(1500);  // Adjust the wait time as needed
         break;
       case LED_PATTERN_ORB_CONNECTED:
         rotateWeakeningRedDotWithPulse(100);
@@ -582,39 +580,68 @@ void runLEDPatterns() {
       case LED_PATTERN_NONE:
       default:
         strip.clear();
-        strip.show();
         break;
     }
     
-    // Move brightness towards target brightness
-    static uint8_t brightnessInterval = 1;
-    static uint8_t brightnessPrevious = pixelBrightness;
-    if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= brightnessInterval) {
-      brightnessPrevious = currentMillis;
-      pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
-      strip.setBrightness(pixelBrightness);
-    }
+    strip.show();
+  }
 
-    // Update the strip with the new color and brightness
+  // Move brightness towards target brightness
+  static uint8_t brightnessInterval = 1;
+  static uint8_t brightnessPrevious = pixelBrightness;
+  if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= brightnessInterval) {
+    brightnessPrevious = currentMillis;
+    pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
+    Serial.println(pixelBrightness);
+    strip.setBrightness(pixelBrightness);
     strip.show();
   }
 }
 
 
-// Fade between all trait colors except NONE
-void fadeTraitColors(int wait) {
-  // Starting at 1 to skip NONE trait
-  static uint8_t colorIndex = 1;
-  static uint8_t fadeStep = 0;
-  static uint32_t currentColor = traitColors[1];
-  static uint32_t nextColor = traitColors[2];;
+// Cycle through each trait color
+void cycleTraitColors(int wait) {
+  static uint8_t colorIndex = 0;
+  static unsigned long lastColorChange = 0;
+  static bool colorChanged = false;
   
   pixelInterval = wait;  // Update delay time
-  targetBrightness = 15;
+  targetBrightness = 255;
 
-  uint8_t r = map(fadeStep, 0, 255, (currentColor >> 16) & 0xFF, (nextColor >> 16) & 0xFF);
-  uint8_t g = map(fadeStep, 0, 255, (currentColor >> 8) & 0xFF, (nextColor >> 8) & 0xFF);
-  uint8_t b = map(fadeStep, 0, 255, currentColor & 0xFF, nextColor & 0xFF);
+  unsigned long currentMillis = millis();
+
+  if (!colorChanged) {
+    // Set all pixels to the current trait color
+    for(uint16_t i = 0; i < pixelNumber; i++) {
+      strip.setPixelColor(i, traitColors[colorIndex]);
+    }
+    colorChanged = true;
+    lastColorChange = currentMillis;
+  }
+
+  // Move to the next color after 2000ms
+  if (currentMillis - lastColorChange >= 2000) {
+    colorIndex = (colorIndex + 1) % NUM_TRAITS;
+    colorChanged = false;
+  }
+}
+
+
+// Fade between all trait color
+void fadeTraitColors(int wait) {
+  static uint8_t colorIndex = 0;
+  static uint8_t fadeStep = 0;
+  static uint32_t currentColor = traitColors[0];
+  static uint32_t nextColor = traitColors[1];
+  static uint8_t fadeSpeed = 64;
+  
+  pixelInterval = wait;  // Update delay time
+  targetBrightness = 100;
+
+  // Adjust fade speed by changing the divisor (higher number = slower fade)
+  uint8_t r = (((nextColor >> 16) & 0xFF) * fadeStep + ((currentColor >> 16) & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
+  uint8_t g = (((nextColor >> 8) & 0xFF) * fadeStep + ((currentColor >> 8) & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
+  uint8_t b = ((nextColor & 0xFF) * fadeStep + (currentColor & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
   uint32_t fadeColor = strip.Color(r, g, b);
 
   // Set all pixels to the fade color
@@ -622,12 +649,13 @@ void fadeTraitColors(int wait) {
     strip.setPixelColor(i, fadeColor);
   }
 
-  fadeStep += 1;  // Adjust this value to change fade speed
-  if (fadeStep >= 255) {
+  fadeStep++;
+  if (fadeStep >= fadeSpeed) {
     fadeStep = 0;
-    colorIndex = (colorIndex % (NUM_TRAITS - 1)) + 1;
+    colorIndex = (colorIndex + 1) % NUM_TRAITS;
     currentColor = nextColor;
-    nextColor = traitColors[(colorIndex % (NUM_TRAITS - 1)) + 1];
+    nextColor = traitColors[colorIndex];
+    delay(2000);
   }
 }
 
