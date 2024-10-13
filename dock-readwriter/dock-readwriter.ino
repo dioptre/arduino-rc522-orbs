@@ -9,7 +9,7 @@ IMPORTANT - remember to set Arduino IDE's Serial Monitor baud rate to 115200
 
 PIN CONNECTIONS 
 
-RC522 RFID READER: 
+PN532 RFID READER: 
   - ARDUINO NANO/UNO:
     - 5V -> 5V
     - GND -> GND
