@@ -4,7 +4,7 @@ ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL
 For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
 
 TROUBLESHOOTING:
-IMPORTANT - remember to set the switches on the PN532 to the "SPI" position - left down, right up
+IMPORTANT - remember to set the switches on the PN532 to the "SPI" position - left/1 down, right/2 up
 IMPORTANT - remember to set Arduino IDE's Serial Monitor baud rate to 115200
 
 PIN CONNECTIONS 
@@ -54,10 +54,10 @@ TODO:
 
 
 // Status LED constants
-#define LED_BUILTIN     13                  // Arduino LED pin
+#define LED_BUILTIN 13                      // Arduino LED pin
 
 // Button constants
-#define BUTTON              2               // Button pin 
+#define BUTTON 2                            // Button pin 
 #define PRESSED LOW
 #define RELEASED HIGH
 bool buttonDetected = false;                // Tracks if a button is detected on startup
@@ -65,7 +65,7 @@ int buttonState = 0;
 
 // NeoPixel LED ring
 #define NEOPIXEL_PIN    6                   // NeoPixel pin
-#define NEOPIXEL_COUNT  8                   // Number of NeoPixels
+#define NEOPIXEL_COUNT  8                  // Number of NeoPixels
 // NeoPixel strip object
 Adafruit_NeoPixel strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 // Tracking patterns
@@ -134,16 +134,16 @@ char trait[5] = "RUMI";
 
 // NFC/RFID Reader - PN532 with software SPI
 #define PN532_SCK  (2)
-#define PN532_MOSI (3)
-#define PN532_SS   (4)
-#define PN532_MISO (5)
+#define PN532_MISO (3)
+#define PN532_MOSI   (4)
+#define PN532_SS (5)
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 // Communication constants
 #define MAX_RETRIES      4                    // Number of retries for failed read/write operations
 #define RETRY_DELAY      1                    // Delay between retries in milliseconds - set low b'cos PN532 lib seems to need us to re-connect the card which itself has some delay
 #define DELAY_AFTER_CARD_PRESENT 300          // Delay after card is presented
-#define NFC_CHECK_INTERVAL 1000               // How often to check for NFC presence
+#define NFC_CHECK_INTERVAL 500                // How often to check for NFC presence
 
 // NFC/RFID Communication
 // NTAG213 has pages 4-39 available for user memory (144 bytes, 36 pages) 4 bytes per page.  
@@ -177,18 +177,19 @@ void setup() {
   detectButton();
 
   // Initialize NeoPixel LED ring
-  strip.begin();                        // Initialize NeoPixel strip object
-  strip.show();                         // Turn OFF all pixels ASAP
-  strip.setBrightness(pixelBrightness); // Set BRIGHTNESS to about 1/5 
+  strip.begin();                          // Initialize NeoPixel strip object
+  strip.show();                           // Turn OFF all pixels ASAP
+  strip.setBrightness(pixelBrightness);   // Set BRIGHTNESS to about 1/5 
 
   // Initialize PN532 NFC module
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (!versiondata) {
     Serial.println("Didn't find PN532 module, won't start.");
-    while (1);                          // Halt the program if PN532 isn't found
+    while (1);                            // Halt the program if PN532 isn't found
   }
-  nfc.SAMConfig();                      // Configure the PN532 to read RFID tags
+  nfc.SAMConfig();                        // Configure the PN532 to read RFID tags
+  nfc.setPassiveActivationRetries(0x11);  // Set the max number of retry attempts to read from a card
 
   // Turn off the status LED
   digitalWrite(LED_BUILTIN, LOW);
@@ -534,16 +535,16 @@ int readPage(int page) {
 
 // Check if an NFC card is present
 bool isNFCPresent() {
-  if (!nfc.inListPassiveTarget()) {
-    return false;
-  }
+
+  // if (!nfc.inListPassiveTarget()) {
+  //   return false;
+  // }
 
   uint8_t success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 30);
   if (!success) {
-    Serial.println("Failed to read NFC tag");
     return false;
   }
 
@@ -613,10 +614,10 @@ void runLEDPatterns() {
 
     switch (currentLEDPattern) {
       case LED_PATTERN_NO_ORB:
-        fadeTraitColors(1500);  // Adjust the wait time as needed
+        rainbow(10);  // Adjust the wait time as needed
         break;
       case LED_PATTERN_ORB_CONNECTED:
-        rotateWeakeningRedDotWithPulse(100);
+        rotateWeakeningMagentaDotWithPulse(50);
         break;
       case LED_PATTERN_ORB_READING:
         theaterChase(strip.Color(0, 255, 0), 100);
@@ -644,6 +645,39 @@ void runLEDPatterns() {
     pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
     strip.setBrightness(pixelBrightness);
     strip.show();
+  }
+}
+
+
+// Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
+void rainbow(int wait) {
+  static unsigned long lastUpdate = 0;
+  static long firstPixelHue = 0;
+
+  pixelInterval = wait;
+  targetBrightness = 50;
+
+  if (currentMillis - lastUpdate >= wait) {
+    lastUpdate = currentMillis;
+
+    // Hue of first pixel runs 5 complete loops through the color wheel.
+    // Color wheel has a range of 65536 but it's OK if we roll over, so
+    // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
+    // means we'll make 5*65536/256 = 1280 passes through this loop:
+    if (firstPixelHue < 5*65536) {
+      // strip.rainbow() can take a single argument (first pixel hue) or
+      // optionally a few extras: number of rainbow repetitions (default 1),
+      // saturation and value (brightness) (both 0-255, similar to the
+      // ColorHSV() function, default 255), and a true/false flag for whether
+      // to apply gamma correction to provide 'truer' colors (default true).
+      strip.rainbow(firstPixelHue);
+      // Above line is equivalent to:
+      // strip.rainbow(firstPixelHue, 1, 255, 255, true);
+      //strip.show(); // Update strip with new contents
+      firstPixelHue += 256;
+    } else {
+      firstPixelHue = 0; // Reset for next cycle
+    }
   }
 }
 
@@ -707,25 +741,24 @@ void fadeTraitColors(int wait) {
 }
 
 
-// Rotates a weakening red dot around the NeoPixel ring
-void rotateWeakeningRedDot(int wait) {
+// Rotates a weakening magenta dot around the NeoPixel ring
+void rotateWeakeningMagentaDot(int wait) {
   static uint16_t currentPixel = 0;
   static uint8_t intensity = 255;
   
   pixelInterval = wait;  // Update delay time
   targetBrightness = 200;
   
-  // Set the current pixel to red with current intensity
-  strip.setPixelColor(currentPixel, strip.Color(intensity, 0, 0));
+  // Set the current pixel to magenta with current intensity
+  strip.setPixelColor(currentPixel, strip.Color(intensity, 0, intensity));
   
   // Set the next pixels with decreasing intensity
   for (int i = 1; i < NEOPIXEL_COUNT; i++) {
     uint16_t pixel = (currentPixel - i + pixelNumber) % pixelNumber;
-    // uint8_t fadeIntensity = intensity * (NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT;
     float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
     uint8_t fadeIntensity = round(intensity * fadeRatio);
     if (fadeIntensity > 0) {
-      strip.setPixelColor(pixel, strip.Color(fadeIntensity, 0, 0));
+      strip.setPixelColor(pixel, strip.Color(fadeIntensity, 0, fadeIntensity));
     } else {
       break;  // Stop if intensity reaches 0
     }
@@ -737,25 +770,25 @@ void rotateWeakeningRedDot(int wait) {
 
 
 // Rotates a weakening red dot around the NeoPixel ring
-void rotateWeakeningRedDotWithPulse(int wait) {
+void rotateWeakeningMagentaDotWithPulse(int wait) {
   static uint16_t currentPixel = 0;
   static uint8_t intensity = 255;
   static uint8_t globalIntensity = 0;
   static int8_t globalDirection = 1;
   
   pixelInterval = wait;  // Update delay time
-  targetBrightness = 200;
+  targetBrightness = 255;
   
   // Update global intensity
-  globalIntensity += globalDirection * 5;  // Adjust 2 to change global fade speed
+  globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
   if (globalIntensity >= 255 || globalIntensity <= 30) {
     globalDirection *= -1;
     globalIntensity = constrain(globalIntensity, 30, 255);
   }
   
-  // Set the current pixel to red with current intensity
+  // Set the current pixel to magenta with current intensity
   uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
-  strip.setPixelColor(currentPixel, strip.Color(adjustedIntensity, 0, 0));
+  strip.setPixelColor(currentPixel, strip.Color(adjustedIntensity, 0, adjustedIntensity));
   
   // Set the next pixels with decreasing intensity
   for (int i = 1; i < NEOPIXEL_COUNT; i++) {
@@ -764,12 +797,11 @@ void rotateWeakeningRedDotWithPulse(int wait) {
     uint8_t fadeIntensity = round(intensity * fadeRatio);
     adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
     if (adjustedIntensity > 0) {
-      strip.setPixelColor(pixel, strip.Color(adjustedIntensity, 0, 0));
+      strip.setPixelColor(pixel, strip.Color(adjustedIntensity, 0, adjustedIntensity));
     } else {
       break;  // Stop if intensity reaches 0
     }
   }
-  
   // Move to next pixel
   currentPixel = (currentPixel + 1) % pixelNumber;
 }
