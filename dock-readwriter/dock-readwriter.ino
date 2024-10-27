@@ -65,7 +65,7 @@ int buttonState = 0;
 
 // NeoPixel LED ring
 #define NEOPIXEL_PIN    6                   // NeoPixel pin
-#define NEOPIXEL_COUNT  8                  // Number of NeoPixels
+#define NEOPIXEL_COUNT  24                  // Number of NeoPixels
 // NeoPixel strip object
 Adafruit_NeoPixel strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 // Tracking patterns
