@@ -134,9 +134,9 @@ char trait[5] = "RUMI";
 
 // NFC/RFID Reader - PN532 with software SPI
 #define PN532_SCK  (2)
-#define PN532_MOSI (3)
-#define PN532_SS   (4)
-#define PN532_MISO (5)
+#define PN532_MISO (3)
+#define PN532_MOSI   (4)
+#define PN532_SS (5)
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 // Communication constants
@@ -545,7 +545,6 @@ bool isNFCPresent() {
   uint8_t uidLength;
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 30);
   if (!success) {
-    Serial.println("Failed to read NFC tag");
     return false;
   }
 
