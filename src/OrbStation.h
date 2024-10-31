@@ -44,6 +44,15 @@ enum TraitId {
     NONE, RUMINATION, SELF_DOUBT, SHAME, HOPELESSNESS, DISCONTENT
 };
 
+const char* const TRAIT_NAMES[] = {
+    "NONE",
+    "RUMINATION",
+    "SELF_DOUBT",
+    "SHAME",
+    "HOPELESSNESS",
+    "DISCONTENT"
+};
+
 const uint32_t TRAIT_COLORS[] = {
     0x000000,  // NONE - Black
     0xFF0000,  // RUMI - Red
@@ -59,6 +68,12 @@ enum StationId {
     GENERATOR, STRING, CHILL, HUNT
 };
 
+const char* const STATION_NAMES[] = {
+    "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST",
+    "ALCHEMY", "PIPES", "CHECKER", "SLERP", "RETOXIFY",
+    "GENERATOR", "STRING", "CHILL", "HUNT"
+};
+
 // Station struct
 struct Station {
     bool visited;
@@ -67,26 +82,27 @@ struct Station {
     byte custom2;
 };
 
+enum LEDPatternId {
+    LED_PATTERN_NO_ORB,
+    LED_PATTERN_ORB_CONNECTED
+};
+
 struct LEDPatternConfig {
+    int id;
     uint8_t brightness;
     uint16_t interval;
     float brightnessInterval;
 };
 
-enum LEDPattern {
-    LED_PATTERN_NO_ORB,
-    LED_PATTERN_ORB_CONNECTED
-};
-
 const LEDPatternConfig LED_PATTERNS[] = {
-    // LED_PATTERN_NO_ORB
     {
+        .id = LED_PATTERN_NO_ORB,
         .brightness = 50,
         .interval = 15,
         .brightnessInterval = 0.1f
     },
-    // LED_PATTERN_ORB_CONNECTED
     {
+        .id = LED_PATTERN_ORB_CONNECTED,
         .brightness = 100,
         .interval = 100,
         .brightnessInterval = 0.1f
@@ -126,6 +142,8 @@ protected:
     Station getCurrentStationInfo();
     // Returns the total energy of the orb across all stations
     byte getTotalEnergy();
+    // Returns the trait name
+    const char* getTraitName();
     // Resets the station information, but keeps the trait
     int resetOrb();
     // Resets the orb with a new trait
@@ -145,7 +163,7 @@ protected:
     // Sets the custom2 value of the current station
     int setCustom2(byte value);
     // Sets the LED pattern
-    void setLEDPattern(int pattern);
+    void setLEDPattern(LEDPatternId patternId);
 
 private:
     // NFC helper methods
@@ -176,10 +194,7 @@ private:
     Adafruit_PN532 nfc;
     
     // LED variables
-    byte ledTargetBrightness;
-    float ledBrightnessInterval;
-    float ledInterval;
-    int ledPattern;
+    LEDPatternConfig ledPatternConfig;
     
     // NFC
     bool isNFCConnected;

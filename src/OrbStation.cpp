@@ -9,9 +9,8 @@ OrbStation::OrbStation(StationId id) :
     stationId = id;
     isNFCConnected = false;
     isOrbConnected = false;
-    setLEDPattern(LED_PATTERN_NO_ORB);
-    ledInterval = 0;
     currentMillis = 0;
+    setLEDPattern(LED_PATTERN_NO_ORB);
 }
 
 // Destructor
@@ -80,6 +79,7 @@ void OrbStation::loop() {
                 onUnformattedNFC();
                 break;
             case STATUS_TRUE:
+                isOrbConnected = true;
                 setLEDPattern(LED_PATTERN_ORB_CONNECTED);
                 readOrbInfo();
                 onOrbConnected();
@@ -133,12 +133,12 @@ int OrbStation::isOrb() {
 void OrbStation::printOrbInfo() {
     Serial.println(F("\n*************************************************"));
     Serial.print(F("Trait: "));
-    Serial.println(orbInfo.trait);
-    Serial.print(F("Total energy: "));
+    Serial.print(getTraitName());
+    Serial.print(F(" Total energy: "));
     Serial.println(getTotalEnergy());
     
     for (int i = 0; i < NUM_STATIONS; i++) {
-        Serial.print(StationId(i));
+        Serial.print(STATION_NAMES[i]);
         Serial.print(F(": Visited:"));
         Serial.print(orbInfo.stations[i].visited ? "Yes" : "No");
         Serial.print(F(", Energy:"));
@@ -209,7 +209,15 @@ int OrbStation::readPage(int page) {
     return STATUS_FAILED;
 }
 
+// Returns the trait name
+const char* OrbStation::getTraitName() {
+    return TRAIT_NAMES[static_cast<int>(orbInfo.trait)];
+}
+
+// Writes the trait to the orb
 int OrbStation::setTrait(TraitId newTrait) {
+    Serial.print(F("Setting trait to "));
+    Serial.println(TRAIT_NAMES[static_cast<int>(newTrait)]);
     orbInfo.trait = newTrait;
     uint8_t traitBytes[4] = {static_cast<uint8_t>(newTrait), 0, 0, 0};  // Convert trait to bytes
     memcpy(page_buffer, traitBytes, 4);
@@ -217,11 +225,19 @@ int OrbStation::setTrait(TraitId newTrait) {
 }
 
 int OrbStation::setVisited(bool visited) {
+    Serial.print(F("Setting visited to "));
+    Serial.print(visited ? "true" : "false");
+    Serial.print(F(" for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].visited = visited;
     return writeStation(stationId);
 }
 
 int OrbStation::setEnergy(byte energy) {
+    Serial.print(F("Setting energy to "));
+    Serial.println(energy);
+    Serial.print(F(" for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].energy = energy;
     int result = writeStation(stationId);
     return result;
@@ -230,7 +246,10 @@ int OrbStation::setEnergy(byte energy) {
 int OrbStation::addEnergy(byte amount) {
     int newEnergy = orbInfo.stations[stationId].energy + amount;
     if (newEnergy > 255) newEnergy = 255;
-    
+    Serial.print(F("Adding "));
+    Serial.print(amount);
+    Serial.print(F(" to energy for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].energy = newEnergy;
     int result = writeStation(stationId);
     return result;
@@ -239,19 +258,30 @@ int OrbStation::addEnergy(byte amount) {
 int OrbStation::removeEnergy(byte amount) {
     int newEnergy = orbInfo.stations[stationId].energy - amount;
     if (newEnergy < 0) newEnergy = 0;
-    
+    Serial.print(F("Removing "));
+    Serial.print(amount);
+    Serial.print(F(" from energy for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].energy = newEnergy;
     int result = writeStation(stationId);
     return result;
 }
 
 int OrbStation::setCustom1(byte value) {
+    Serial.print(F("Setting custom1 to "));
+    Serial.println(value);
+    Serial.print(F(" for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].custom1 = value;
     int result = writeStation(stationId);
     return result;
 }
 
 int OrbStation::setCustom2(byte value) {
+    Serial.print(F("Setting custom2 to "));
+    Serial.println(value);
+    Serial.print(F(" for station "));
+    Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].custom2 = value;
     int result = writeStation(stationId);
     return result;
@@ -276,6 +306,7 @@ void OrbStation::handleError(const char* message) {
 
 // Formats the NFC with "ORBS" header, default station information and given trait
 int OrbStation::formatNFC(TraitId trait) {
+    Serial.println(F("Formatting NFC with ORBS header, default station information and given trait..."));
     // Write header
     memcpy(page_buffer, ORBS_HEADER, 4);
     if (writePage(ORBS_PAGE, page_buffer) == STATUS_FAILED) {
@@ -311,6 +342,7 @@ int OrbStation::resetOrb() {
 
 // Initialize stations information to default values
 void OrbStation::reInitializeStations() {
+    Serial.println(F("Initializing stations information to default values..."));
     for (int i = 0; i < NUM_STATIONS; i++) {
         orbInfo.stations[i] = {false, 0, 0, 0};
     }
@@ -364,12 +396,8 @@ int OrbStation::writeStations() {
 
 /********************** LED FUNCTIONS *****************************/
 
-void OrbStation::setLEDPattern(int pattern) {
-    ledPattern = pattern;
-    const LEDPatternConfig& config = LED_PATTERNS[pattern];
-    ledInterval = config.interval;
-    ledTargetBrightness = config.brightness;
-    ledBrightnessInterval = config.brightnessInterval;
+void OrbStation::setLEDPattern(LEDPatternId patternId) {
+    ledPatternConfig = LED_PATTERNS[patternId];
 }
 
 void OrbStation::runLEDPatterns() {
@@ -377,10 +405,10 @@ void OrbStation::runLEDPatterns() {
     static uint8_t ledBrightness;
     static unsigned long ledBrightnessPreviousMillis;
 
-    if (currentMillis - ledPreviousMillis >= ledInterval) {
+    if (currentMillis - ledPreviousMillis >= ledPatternConfig.interval) {
         ledPreviousMillis = currentMillis;
 
-        switch (ledPattern) {
+        switch (ledPatternConfig.id) {
             case LED_PATTERN_NO_ORB:
                 led_rainbow();
                 break;
@@ -393,9 +421,9 @@ void OrbStation::runLEDPatterns() {
         }
 
         // Smooth brightness transitions
-        if (ledBrightness != ledTargetBrightness && currentMillis - ledBrightnessPreviousMillis >= ledBrightnessInterval) {
+        if (ledBrightness != ledPatternConfig.brightness && currentMillis - ledBrightnessPreviousMillis >= ledPatternConfig.brightnessInterval) {
             ledBrightnessPreviousMillis = currentMillis;
-            ledBrightness = lerp(ledBrightness, ledTargetBrightness, ledBrightnessInterval);
+            ledBrightness = lerp(ledBrightness, ledPatternConfig.brightness, ledPatternConfig.brightnessInterval);
             strip.setBrightness(ledBrightness);
         }
 

@@ -8,7 +8,7 @@ public:
 protected:
     void onOrbConnected() override {
         Serial.print("Orb connected with trait: ");
-        Serial.println(orbInfo.trait);
+        Serial.println(getTraitName());
         
         // Example of accessing station data
         Serial.print("Current station energy: ");
