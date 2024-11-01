@@ -1,8 +1,11 @@
 # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
 README.md
+README
 platformio.ini
 .vscode
 .cursorignore
 .pio
 .code-workspace
 LICENSE
+.gitignore
+dock-readwriter.ino

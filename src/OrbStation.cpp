@@ -41,6 +41,8 @@ void OrbStation::begin() {
     }
     nfc.SAMConfig();
 
+    Serial.print(F("Station: "));
+    Serial.println(STATION_NAMES[stationId]);
     Serial.println(F("Put your orbs in me!"));
 }
 
