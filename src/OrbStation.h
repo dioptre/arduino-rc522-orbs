@@ -38,7 +38,7 @@
 
 // Station constants
 #define NUM_STATIONS 14
-#define NUM_TRAITS 5
+#define NUM_TRAITS 6
 
 enum TraitId {
     NONE, RUMINATION, SELF_DOUBT, SHAME, HOPELESSNESS, DISCONTENT
@@ -54,7 +54,7 @@ const char* const TRAIT_NAMES[] = {
 };
 
 const uint32_t TRAIT_COLORS[] = {
-    0x000000,  // NONE - Black
+    0xFFFFFF,  // NONE - White
     0xFF0000,  // RUMI - Red
     0x00FF00,  // SELF - Green
     0x0000FF,  // SHAM - Blue
@@ -164,6 +164,8 @@ protected:
     int setCustom2(byte value);
     // Sets the LED pattern
     void setLEDPattern(LEDPatternId patternId);
+    // Reads and prints the entire NFC storage
+    void printNFCStorage();
 
 private:
     // NFC helper methods

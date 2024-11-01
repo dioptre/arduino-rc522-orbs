@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include "OrbStationExample.cpp"
+#include "OrbStationConfigure.cpp"
 
-OrbStationExample orbStation(StationId::RETOXIFY);
+OrbStationConfigure orbStation{};
 
 void setup() {
     Serial.begin(115200);

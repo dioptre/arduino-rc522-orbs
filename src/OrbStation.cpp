@@ -40,6 +40,8 @@ void OrbStation::begin() {
         }
     }
     nfc.SAMConfig();
+
+    Serial.println(F("Put your orbs in me!"));
 }
 
 void OrbStation::loop() {
@@ -114,17 +116,13 @@ bool OrbStation::isNFCActive() {
 
 // Whether the connected NFC is formatted as an orb
 int OrbStation::isOrb() {
-    Serial.println("Checking for ORBS header...");
     if (readPage(ORBS_PAGE) == STATUS_FAILED) {
         Serial.println(F("Failed to read data from NFC"));
         return STATUS_FAILED;
     }
-
     if (memcmp(page_buffer, ORBS_HEADER, 4) == 0) {
-        Serial.println(F("ORBS header found")); 
         return STATUS_TRUE;
     }
-
     Serial.println(F("ORBS header not found"));
     return STATUS_FALSE;
 }
@@ -207,6 +205,25 @@ int OrbStation::readPage(int page) {
 
     Serial.println(F("Read failed after retries"));
     return STATUS_FAILED;
+}
+
+// Read and print the entire NFC storage
+void OrbStation::printNFCStorage() {
+    // Read the entire NFC storage
+    for (int i = 0; i < 45; i++) {
+        if (readPage(i) == STATUS_FAILED) {
+            Serial.println(F("Failed to read page"));
+            return;
+        }
+        Serial.print(F("Page "));
+        Serial.print(i);
+        Serial.print(F(": "));
+        for (int j = 0; j < 4; j++) {
+            Serial.print(page_buffer[j]);
+            Serial.print(F(" "));
+        }
+        Serial.println();
+    }
 }
 
 // Returns the trait name
