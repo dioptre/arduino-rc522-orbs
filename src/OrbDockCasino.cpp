@@ -67,8 +67,8 @@ public:
         if (display.isButton3Pressed()) {
             Station station = getCurrentStationInfo();
             if (station.energy > 5) {
-                removeEnergy(1);
-                Serial.println(F("Removed 1 energy"));
+                removeEnergy(5);
+                Serial.println(F("Removed 5 energy"));
             }
             else {
                 removeEnergy(station.energy);
@@ -82,7 +82,7 @@ public:
             Station station = getCurrentStationInfo();
             if (station.energy >= 1) {
                 removeEnergy(1);
-                Serial.println(F("Removed 5 energy"));
+                Serial.println(F("Removed 1 energy"));
             }
             //delay(100);
             updateDisplay();
