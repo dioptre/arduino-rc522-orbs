@@ -16,8 +16,8 @@
 #include <U8glib.h>
 #include <Arduino.h>
 
-#define SCREEN_WIDTH 16 // Characters per line
-#define SCREEN_HEIGHT 8 // Number of lines
+#define DISPLAY_WIDTH 128  // Display width in pixels
+#define DISPLAY_HEIGHT 64  // Display height in pixels
 #define SCREEN_ADDRESS 0x3C
 
 #define BTN1_PIN 8
@@ -28,14 +28,18 @@
 class ButtonDisplay {
 private:
     U8GLIB_SSD1306_128X64 display;
-    char displayBuffer[SCREEN_HEIGHT][SCREEN_WIDTH + 1];  // +1 for null terminator
     bool buttonsInitialized;
     bool displayInitialized;
     uint8_t cursorX;
     uint8_t cursorY;
-    const uint8_t charWidth = 8;  // Width of each character in pixels
-    const uint8_t charHeight = 8; // Height of each character in pixels
-
+    uint8_t charHeight;
+    bool needsUpdate;
+    char lastText[16]; // Buffer to store last printed text
+    const uint8_t* defaultFont;
+    static const int MAX_LINES = 8;  // Maximum number of lines to store
+    char textLines[MAX_LINES][16];  // Buffer to store multiple lines
+    uint8_t numLines;                // Current number of lines
+    
     void initButtons() {
         if (!buttonsInitialized) {
             pinMode(BTN1_PIN, INPUT_PULLUP);
@@ -60,23 +64,32 @@ private:
             }
 
             display.begin();
-            display.setFont(u8g_font_6x10);
+            display.setFont(defaultFont);  // Use constructor-provided font
             display.setFontRefHeightExtendedText();
             display.setDefaultForegroundColor();
             display.setFontPosTop();
+            
+            // Calculate initial character height
+            charHeight = display.getFontAscent() - display.getFontDescent();
             cursorX = 0;
             cursorY = 0;
             displayInitialized = true;
+            numLines = 0;
+            lastText[0] = '\0';
         }
     }
 
+
 public:
-    ButtonDisplay() : display(U8G_I2C_OPT_NONE) {
+    ButtonDisplay(const uint8_t* font) : display(U8G_I2C_OPT_NONE), defaultFont(font) {
         buttonsInitialized = false;
         displayInitialized = false;
         cursorX = 0;
         cursorY = 0;
-        clearBuffer();
+        charHeight = 8;
+        needsUpdate = false;
+        numLines = 0;
+        lastText[0] = '\0';
     }
 
     void begin() {
@@ -85,47 +98,52 @@ public:
     }
 
     // Display functions
-    void clearDisplay() {
-        clearBuffer();
+void clearDisplay() {
         cursorX = 0;
         cursorY = 0;
-        updateDisplay();
-    }
-
-    // Add method to clear buffer
-    void clearBuffer() {
-        for (int i = 0; i < SCREEN_HEIGHT; i++) {
-            memset(displayBuffer[i], 0, SCREEN_WIDTH + 1);
-        }
-    }
-
-    void updateDisplay() {
+        numLines = 0;  // Reset line counter
         display.firstPage();
         do {
-            // Draw all lines from buffer
-            for (int i = 0; i < SCREEN_HEIGHT; i++) {
-                if (displayBuffer[i][0] != 0) {  // If line is not empty
-                    display.drawStr(0, i * charHeight, displayBuffer[i]);
-                }
-            }
+            // Empty draw - clears display
         } while(display.nextPage());
     }
 
+    void updateDisplay() {
+        if (needsUpdate) {
+            display.firstPage();
+            do {
+                // Calculate total height of all lines
+                uint8_t totalHeight = numLines * charHeight;
+                
+                // Calculate starting Y position to center vertically
+                uint8_t startY = (DISPLAY_HEIGHT - totalHeight) / 2;
+                uint8_t y = startY;
+                
+                // Draw all stored lines
+                for (uint8_t i = 0; i < numLines; i++) {
+                    // Calculate width of text and center position horizontally
+                    uint8_t strWidth = display.getStrWidth(textLines[i]);
+                    uint8_t x = (DISPLAY_WIDTH - strWidth) / 2;
+                    display.drawStr(x, y, textLines[i]);
+                    y += charHeight;
+                }
+            } while(display.nextPage());
+            needsUpdate = false;
+        }
+    }
+
     void setCursor(uint8_t x, uint8_t y) {
-        cursorX = x;
-        cursorY = y;
+        if (x < DISPLAY_WIDTH) cursorX = x;  // Added bounds checking
+        if (y < DISPLAY_HEIGHT) cursorY = y;     // Added bounds checking
     }
 
     void print(const char* text) {
-        // Add text to buffer at current position
-        int remaining = SCREEN_WIDTH - cursorX;
-        int len = strlen(text);
-        if (len > remaining) len = remaining;
-        
-        if (cursorY < SCREEN_HEIGHT) {
-            strncat(displayBuffer[cursorY] + cursorX, text, len);
-            cursorX += len;
-        }
+        // Store position and text for next update
+        strncpy(lastText, text, sizeof(lastText)-1);
+        lastText[sizeof(lastText)-1] = '\0';
+        display.drawStr(cursorX, cursorY, text);
+        cursorX += display.getStrWidth(text);
+        needsUpdate = true;
     }
 
     void print(int number) {
@@ -138,17 +156,18 @@ public:
         print((int)number);
     }
 
-    void println(const char* text) {
-        print(text);
-        println();
-    }
-
-    void println() {
+    void println(const char* text = nullptr) {
+        if (text != nullptr && numLines < MAX_LINES) {
+            strncpy(textLines[numLines], text, sizeof(textLines[0])-1);
+            textLines[numLines][sizeof(textLines[0])-1] = '\0';
+            numLines++;
+        }
         cursorX = 0;
-        cursorY++;
-        if (cursorY >= SCREEN_HEIGHT) {
+        cursorY += charHeight;
+        if (cursorY >= DISPLAY_HEIGHT) {
             cursorY = 0;
         }
+        needsUpdate = true;
     }
 
     void setFont(const uint8_t* font) {
@@ -173,10 +192,12 @@ public:
     }
 
     // Utility functions
+    // Modify showMessage to use the update pattern
     void showMessage(const char* message, uint16_t duration = 2000) {
         clearDisplay();
         setCursor(0, 0);
-        println(message);
+        print(message);
+        updateDisplay();  // Add explicit update
         if (duration > 0) {
             delay(duration);
         }

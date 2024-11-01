@@ -40,7 +40,7 @@ protected:
     void onUnformattedNFC() override {
         Serial.println("Unformatted NFC card detected");
         // Example: Format card with RUMINATION trait
-        // TraitId trait = TraitId::RUMINATION;
+        // TraitId trait = TraitId::RUMINATE;
         // formatNFC(trait);
     }
 };

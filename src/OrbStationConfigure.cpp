@@ -1,5 +1,5 @@
 /**
- * Orb Reset and Formatting Station
+ * Orb Reset and Formatting Dock
  * 
  * I2C pins:
  * SDA: A4 (Pin 27)
@@ -17,28 +17,28 @@
 
 class OrbStationConfigure : public OrbStation {
 private:
-    ButtonDisplay display;
+
+    // See https://github.com/olikraus/u8glib/wiki/fontsize
+    // ... and 
+    const uint8_t* font =  u8g_font_fub17; // u8g_font_osb21;
+    ButtonDisplay display{font};
     TraitId selectedTrait;
 
     void updateDisplay() {
         display.clearDisplay();
-        display.setCursor(0,0);
         
         if (isOrbConnected) {
-            display.println("Orb Connected");
-            display.print("Current Trait: ");
-            display.println(getTraitName());
-            display.println("Total Energy: ");
-            display.print(getTotalEnergy());
-            display.println();
+            char shortName[9];
+            strncpy(shortName, TRAIT_NAMES[selectedTrait], 8);
+            shortName[8] = '\0';
+            display.println(shortName);
+            display.println(TRAIT_COLOR_NAMES[selectedTrait]);
         } else {
-            display.println("No Orb Connected");
-            display.println("Selected Trait:");
-            display.println(TRAIT_NAMES[selectedTrait]);
-            display.println("\nControls:");
-            display.println("BTN1/2: Cycle trait");
-            display.println("BTN3: Reset orb");
-            display.println("BTN4: Format orb");
+            char shortName[9];
+            strncpy(shortName, TRAIT_NAMES[selectedTrait], 8);
+            shortName[8] = '\0';
+            display.println(shortName);
+            display.println(TRAIT_COLOR_NAMES[selectedTrait]);
         }
         
         display.updateDisplay();
@@ -46,7 +46,7 @@ private:
 
 public:
     OrbStationConfigure() : OrbStation(StationId::CONFIGURE) {
-        selectedTrait = TraitId::RUMINATION;
+        selectedTrait = TraitId::RUMINATE;
     }
 
     void begin() {
@@ -110,12 +110,6 @@ protected:
     }
 
     void onUnformattedNFC() override {
-        display.clearDisplay();
-        display.setCursor(0,0);
-        display.println("Unformatted NFC");
-        display.println("Press BTN4 to");
-        display.println("format with");
-        display.println(TRAIT_NAMES[static_cast<int>(selectedTrait)]);
-        display.updateDisplay();
+        formatNFC(selectedTrait);
     }
 };

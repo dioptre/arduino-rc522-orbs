@@ -21,10 +21,10 @@
 
 // Communication constants
 #define MAX_RETRIES      4
-#define RETRY_DELAY      50
+#define RETRY_DELAY      10
 #define NFC_TIMEOUT      1000
-#define DELAY_AFTER_CARD_PRESENT 300
-#define NFC_CHECK_INTERVAL 500
+#define DELAY_AFTER_CARD_PRESENT 50
+#define NFC_CHECK_INTERVAL 300
 
 // NFC constants
 #define PAGE_OFFSET 4
@@ -38,28 +38,34 @@
 
 // Station constants
 #define NUM_STATIONS 14
-#define NUM_TRAITS 6
+#define NUM_TRAITS 5
 
 enum TraitId {
-    NONE, RUMINATION, SELF_DOUBT, SHAME, HOPELESSNESS, DISCONTENT
+    RUMINATE, DOUBT, SHAME, HOPELESS, DISCONTENT
 };
 
 const char* const TRAIT_NAMES[] = {
-    "NONE",
-    "RUMINATION",
-    "SELF_DOUBT",
+    "RUMINATE",
+    "DOUBT",
     "SHAME",
-    "HOPELESSNESS",
+    "HOPELESS",
     "DISCONTENT"
 };
 
 const uint32_t TRAIT_COLORS[] = {
-    0xFFFFFF,  // NONE - White
-    0xFF0000,  // RUMI - Red
-    0x00FF00,  // SELF - Green
-    0x0000FF,  // SHAM - Blue
-    0xFFFF00,  // HOPE - Yellow
-    0xFF00FF   // DISC - Purple
+    0xFF7F00,  // RUMINATE - Orange
+    0x00FF00,  // DOUBT - Green
+    0x0000FF,  // SHAME - Blue
+    0xFFFF00,  // HOPELESS - Yellow
+    0xFF00FF   // DISCONTENT - Magenta
+};
+
+const char* const TRAIT_COLOR_NAMES[] = {
+    "orange",
+    "green",
+    "blue",
+    "yellow",
+    "magenta"
 };
 
 enum StationId {
@@ -128,6 +134,7 @@ protected:
     StationId stationId;
     OrbInfo orbInfo;
     bool isOrbConnected;
+    bool isUnformattedNFC;
     
     // Timing variables
     unsigned long currentMillis;

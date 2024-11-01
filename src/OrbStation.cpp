@@ -9,6 +9,7 @@ OrbStation::OrbStation(StationId id) :
     stationId = id;
     isNFCConnected = false;
     isOrbConnected = false;
+    isUnformattedNFC = false;
     currentMillis = 0;
     setLEDPattern(LED_PATTERN_NO_ORB);
 }
@@ -39,7 +40,8 @@ void OrbStation::begin() {
             delay(1000);
         }
     }
-    nfc.SAMConfig();
+    nfc.SAMConfig();                        // Configure the PN532 to read RFID tags
+    nfc.setPassiveActivationRetries(0x11);  // Set the max number of retry attempts to read from a card
 
     Serial.print(F("Station: "));
     Serial.println(STATION_NAMES[stationId]);
@@ -62,9 +64,11 @@ void OrbStation::loop() {
     // While orb is connected, check if it's still connected
     if (isNFCConnected && isOrbConnected) {
         if (!isNFCActive()) {
+            // Orb has disconnected
             setLEDPattern(LED_PATTERN_NO_ORB);
             isOrbConnected = false;
             isNFCConnected = false;
+            isUnformattedNFC = false;
             onOrbDisconnected();
         }
         return;
@@ -80,7 +84,11 @@ void OrbStation::loop() {
                 handleError("Failed to check orb header");
                 return;
             case STATUS_FALSE:
-                onUnformattedNFC();
+                if (!isUnformattedNFC) {
+                    Serial.println(F("Unformatted NFC connected"));
+                    isUnformattedNFC = true;
+                    onUnformattedNFC();
+                }
                 break;
             case STATUS_TRUE:
                 isOrbConnected = true;
@@ -181,7 +189,7 @@ int OrbStation::writePage(int page, uint8_t* data) {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
             Serial.println(F("Retrying write"));
-            delay(RETRY_DELAY);
+            //delay(RETRY_DELAY);
             nfc.inListPassiveTarget();
         }
     }
