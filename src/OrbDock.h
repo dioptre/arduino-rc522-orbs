@@ -6,12 +6,20 @@
 #include <Adafruit_PN532.h>
 #include <Adafruit_NeoPixel.h>
 
-// PN532 pin definitions
+// NeoPixel pin 
+#define NEOPIXEL_PIN (6)
+
+// PN532 pins
 #define PN532_SCK  (2)
 #define PN532_MISO (3)
 #define PN532_MOSI (4)
 #define PN532_SS   (5)
-#define NEOPIXEL_PIN (6)
+
+// Old PN532 pins - for early dock designs
+// #define PN532_SCK  (2)
+// #define PN532_MISO (5)
+// #define PN532_MOSI (3)
+// #define PN532_SS   (4)
 
 // Status constants
 #define STATUS_FAILED    0
@@ -41,41 +49,41 @@
 #define NUM_TRAITS 5
 
 enum TraitId {
-    RUMINATE, DOUBT, SHAME, HOPELESS, DISCONTENT
+    RUMINATE, SHAME, DOUBT, DISCONTENT, HOPELESS
 };
 
 const char* const TRAIT_NAMES[] = {
     "RUMINATE",
-    "DOUBT",
     "SHAME",
-    "HOPELESS",
-    "DISCONTENT"
+    "DOUBT",
+    "DISCONTENT",
+    "HOPELESS"
 };
 
 const uint32_t TRAIT_COLORS[] = {
-    0xFF7F00,  // RUMINATE - Orange
-    0x00FF00,  // DOUBT - Green
-    0x0000FF,  // SHAME - Blue
-    0xFFFF00,  // HOPELESS - Yellow
-    0xFF00FF   // DISCONTENT - Magenta
+    0xFF2800,  // Orange for RUMINATE (Rumination)
+    0xFF4600,  // Yellow for SHAME (Shame Spiral)
+    0x20FF00,  // Green for DOUBT (Self Doubt)
+    0xFF00D2,  // Pink/Magenta for DISCONTENT (Discontentment)
+    0x1400FF   // Blue for HOPELESS (Hopelessness)
 };
 
 const char* const TRAIT_COLOR_NAMES[] = {
-    "orange",
-    "green",
-    "blue",
-    "yellow",
-    "magenta"
+    "orange",  // Rumination
+    "yellow",  // Shame Spiral
+    "green",   // Self Doubt
+    "pink",    // Discontentment
+    "blue"     // Hopelessness
 };
 
 enum StationId {
-    CONFIGURE, CONSOLE, DISTILLER, CASINO, FOREST,
+    NONE, CONFIGURE, CONSOLE, DISTILLER, CASINO, FOREST,
     ALCHEMY, PIPES, CHECKER, SLERP, RETOXIFY,
     GENERATOR, STRING, CHILL, HUNT
 };
 
 const char* const STATION_NAMES[] = {
-    "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST",
+    "NONE", "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST",
     "ALCHEMY", "PIPES", "CHECKER", "SLERP", "RETOXIFY",
     "GENERATOR", "STRING", "CHILL", "HUNT"
 };
@@ -83,9 +91,8 @@ const char* const STATION_NAMES[] = {
 // Station struct
 struct Station {
     bool visited;
-    byte energy;
-    byte custom1;
-    byte custom2;
+    uint16_t energy;
+    byte custom;
 };
 
 enum LEDPatternId {
@@ -103,15 +110,15 @@ struct LEDPatternConfig {
 const LEDPatternConfig LED_PATTERNS[] = {
     {
         .id = LED_PATTERN_NO_ORB,
-        .brightness = 50,
+        .brightness = 200,
         .interval = 15,
-        .brightnessInterval = 0.1f
+        .brightnessInterval = 5.0f
     },
     {
         .id = LED_PATTERN_ORB_CONNECTED,
-        .brightness = 100,
-        .interval = 100,
-        .brightnessInterval = 0.1f
+        .brightness = 255,
+        .interval = 80,
+        .brightnessInterval = 5.0f
     }
 };
 
@@ -149,7 +156,7 @@ protected:
     // Helper methods that child classes can use
     Station getCurrentStationInfo();
     // Returns the total energy of the orb across all stations
-    byte getTotalEnergy();
+    uint16_t getTotalEnergy();
     // Returns the trait name
     const char* getTraitName();
     // Resets the station information, but keeps the trait
@@ -159,17 +166,15 @@ protected:
     // Writes the trait to the orb
     int setTrait(TraitId newTrait);
     // Adds energy to the current station
-    int addEnergy(byte amount);
+    int addEnergy(uint16_t amount);
     // Removes energy from the current station
-    int removeEnergy(byte amount);
+    int removeEnergy(uint16_t amount);
     // Sets the energy of the current station
-    int setEnergy(byte amount);
+    int setEnergy(uint16_t amount);
     // Sets the visited status of the current station
     int setVisited(bool visited);
-    // Sets the custom1 value of the current station
-    int setCustom1(byte value);
-    // Sets the custom2 value of the current station
-    int setCustom2(byte value);
+    // Sets the custom value of the current station
+    int setCustom(byte value);
     // Sets the LED pattern
     void setLEDPattern(LEDPatternId patternId);
     // Reads and prints the entire NFC storage

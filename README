@@ -3,8 +3,10 @@ ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL
 For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
 
 TROUBLESHOOTING:
-IMPORTANT - remember to set the switches on the PN532 to the "SPI" position - left/1 down, right/2 up
-IMPORTANT - remember to set Arduino IDE's Serial Monitor baud rate to 115200
+ - Bootloader on some Arduinos is old - try switching the upload_speed in platformio.ini to 57600
+ - remember to set the switches on the PN532 to the "SPI" position - left/1 down, right/2 up
+ - remember to set Arduino IDE's Serial Monitor baud rate to 115200
+ - Some docks use an old pinout - switch to the old PN532 pins in OrbDock.h
 
 PIN CONNECTIONS 
 

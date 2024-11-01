@@ -162,9 +162,9 @@ void OrbDock::printOrbInfo() {
 int OrbDock::writeStation(int stationId) {
     // Prepare the page buffer with station data
     page_buffer[0] = orbInfo.stations[stationId].visited ? 1 : 0;
-    page_buffer[1] = orbInfo.stations[stationId].energy;
-    page_buffer[2] = orbInfo.stations[stationId].custom1;
-    page_buffer[3] = orbInfo.stations[stationId].custom2;
+    page_buffer[1] = (orbInfo.stations[stationId].energy >> 8) & 0xFF; // High byte
+    page_buffer[2] = orbInfo.stations[stationId].energy & 0xFF; // Low byte
+    page_buffer[3] = orbInfo.stations[stationId].custom;
 
     // Write the buffer to the NFC
     int writeDataStatus = writePage(STATIONS_PAGE_OFFSET + stationId, page_buffer);
@@ -260,7 +260,7 @@ int OrbDock::setVisited(bool visited) {
     return writeStation(stationId);
 }
 
-int OrbDock::setEnergy(byte energy) {
+int OrbDock::setEnergy(uint16_t energy) {
     Serial.print(F("Setting energy to "));
     Serial.println(energy);
     Serial.print(F(" for station "));
@@ -270,9 +270,9 @@ int OrbDock::setEnergy(byte energy) {
     return result;
 }
 
-int OrbDock::addEnergy(byte amount) {
-    int newEnergy = orbInfo.stations[stationId].energy + amount;
-    if (newEnergy > 255) newEnergy = 255;
+int OrbDock::addEnergy(uint16_t amount) {
+    uint32_t newEnergy = orbInfo.stations[stationId].energy + amount;
+    if (newEnergy > 65535) newEnergy = 65535;
     Serial.print(F("Adding "));
     Serial.print(amount);
     Serial.print(F(" to energy for station "));
@@ -282,8 +282,8 @@ int OrbDock::addEnergy(byte amount) {
     return result;
 }
 
-int OrbDock::removeEnergy(byte amount) {
-    int newEnergy = orbInfo.stations[stationId].energy - amount;
+int OrbDock::removeEnergy(uint16_t amount) {
+    int32_t newEnergy = orbInfo.stations[stationId].energy - amount;
     if (newEnergy < 0) newEnergy = 0;
     Serial.print(F("Removing "));
     Serial.print(amount);
@@ -294,28 +294,18 @@ int OrbDock::removeEnergy(byte amount) {
     return result;
 }
 
-int OrbDock::setCustom1(byte value) {
-    Serial.print(F("Setting custom1 to "));
+int OrbDock::setCustom(byte value) {
+    Serial.print(F("Setting custom to "));
     Serial.println(value);
     Serial.print(F(" for station "));
     Serial.println(STATION_NAMES[stationId]);
-    orbInfo.stations[stationId].custom1 = value;
+    orbInfo.stations[stationId].custom = value;
     int result = writeStation(stationId);
     return result;
 }
 
-int OrbDock::setCustom2(byte value) {
-    Serial.print(F("Setting custom2 to "));
-    Serial.println(value);
-    Serial.print(F(" for station "));
-    Serial.println(STATION_NAMES[stationId]);
-    orbInfo.stations[stationId].custom2 = value;
-    int result = writeStation(stationId);
-    return result;
-}
-
-byte OrbDock::getTotalEnergy() {
-    byte totalEnergy = 0;
+uint16_t OrbDock::getTotalEnergy() {
+    uint16_t totalEnergy = 0;
     for (int i = 0; i < NUM_STATIONS; i++) {
         totalEnergy += orbInfo.stations[i].energy;
     }
@@ -371,7 +361,7 @@ int OrbDock::resetOrb() {
 void OrbDock::reInitializeStations() {
     Serial.println(F("Initializing stations information to default values..."));
     for (int i = 0; i < NUM_STATIONS; i++) {
-        orbInfo.stations[i] = {false, 0, 0, 0};
+        orbInfo.stations[i] = {false, 0, 0};
     }
 }
 
@@ -386,9 +376,8 @@ int OrbDock::readOrbInfo() {
             return STATUS_FAILED;
         }
         orbInfo.stations[i].visited = page_buffer[0] == 1;
-        orbInfo.stations[i].energy = page_buffer[1];
-        orbInfo.stations[i].custom1 = page_buffer[2];
-        orbInfo.stations[i].custom2 = page_buffer[3];
+        orbInfo.stations[i].energy = (page_buffer[1] << 8) | page_buffer[2]; // Combine high and low bytes
+        orbInfo.stations[i].custom = page_buffer[3];
     }
 
     // Read trait
@@ -472,6 +461,43 @@ void OrbDock::led_rainbow() {
 
 // Rotates a weakening dot around the NeoPixel ring using the trait color
 void OrbDock::led_trait_chase() {
+//     static uint16_t currentPixel = 0;
+//     static uint8_t intensity = 255;
+//     static uint8_t globalIntensity = 0;
+//     static int8_t globalDirection = 1;
+    
+//     // Update global intensity
+//     globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
+//     if (globalIntensity >= 255 || globalIntensity <= 30) {
+//         globalDirection *= -1;
+//         globalIntensity = constrain(globalIntensity, 30, 255);
+//     }
+
+//     // Find the trait color
+//     uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)]; // Default to first trait
+    
+//     // Set the current pixel to trait color with current intensity
+//     uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
+//     strip.setPixelColor(currentPixel, dimColor(traitColor, adjustedIntensity));
+    
+//     // Set the next pixels with decreasing intensity
+//     for (int i = 1; i < NEOPIXEL_COUNT; i++) {
+//         uint16_t pixel = (currentPixel - i + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
+//         float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
+//         uint8_t fadeIntensity = round(intensity * fadeRatio);
+//         adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
+//         if (adjustedIntensity > 0) {
+//         strip.setPixelColor(pixel, dimColor(traitColor, adjustedIntensity));
+//         } else {
+//         break;  // Stop if intensity reaches 0
+//         }
+//     }
+//     // Move to next pixel
+//     currentPixel = (currentPixel + 1) % NEOPIXEL_COUNT;
+// }
+
+// // Rotates a weakening dot around the NeoPixel ring using the trait color
+// void OrbDock::led_trait_chase_two_dots() {
     static uint16_t currentPixel = 0;
     static uint8_t intensity = 255;
     static uint8_t globalIntensity = 0;
@@ -485,24 +511,33 @@ void OrbDock::led_trait_chase() {
     }
 
     // Find the trait color
-    uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)]; // Default to first trait
+    uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+
+    // Calculate opposite pixel position
+    uint16_t oppositePixel = (currentPixel + (NEOPIXEL_COUNT / 2)) % NEOPIXEL_COUNT;
     
-    // Set the current pixel to trait color with current intensity
+    // Set both bright dots
     uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
     strip.setPixelColor(currentPixel, dimColor(traitColor, adjustedIntensity));
+    strip.setPixelColor(oppositePixel, dimColor(traitColor, adjustedIntensity));
     
-    // Set the next pixels with decreasing intensity
-    for (int i = 1; i < NEOPIXEL_COUNT; i++) {
-        uint16_t pixel = (currentPixel - i + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
-        float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
+    // Set pixels between the dots with decreasing intensity
+    for (int i = 1; i < NEOPIXEL_COUNT/2; i++) {
+        // Calculate pixels on both sides
+        uint16_t pixel1 = (currentPixel + i) % NEOPIXEL_COUNT;
+        uint16_t pixel2 = (currentPixel - i + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
+        
+        // Calculate fade based on distance to nearest bright dot
+        float fadeRatio = pow(float(NEOPIXEL_COUNT/4 - abs(i - NEOPIXEL_COUNT/4)) / (NEOPIXEL_COUNT/4), 2);
         uint8_t fadeIntensity = round(intensity * fadeRatio);
         adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
+        
         if (adjustedIntensity > 0) {
-        strip.setPixelColor(pixel, dimColor(traitColor, adjustedIntensity));
-        } else {
-        break;  // Stop if intensity reaches 0
+            strip.setPixelColor(pixel1, dimColor(traitColor, adjustedIntensity));
+            strip.setPixelColor(pixel2, dimColor(traitColor, adjustedIntensity));
         }
     }
+    
     // Move to next pixel
     currentPixel = (currentPixel + 1) % NEOPIXEL_COUNT;
 }
