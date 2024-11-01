@@ -304,6 +304,10 @@ int OrbDock::setCustom(byte value) {
     return result;
 }
 
+uint16_t OrbDock::getEnergy() {
+    return orbInfo.stations[stationId].energy;
+}
+
 uint16_t OrbDock::getTotalEnergy() {
     uint16_t totalEnergy = 0;
     for (int i = 0; i < NUM_STATIONS; i++) {

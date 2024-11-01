@@ -13,7 +13,7 @@
  */
 
 #include "OrbDock.h"
-#include "ButtonDisplay.cpp"
+#include "ButtonDisplay.h"
 
 class OrbDockConfigurizer : public OrbDock {
 private:

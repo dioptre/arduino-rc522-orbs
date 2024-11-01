@@ -9,3 +9,4 @@ platformio.ini
 LICENSE
 .gitignore
 dock-readwriter.ino
+*.workspace

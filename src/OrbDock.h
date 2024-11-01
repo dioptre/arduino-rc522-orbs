@@ -171,6 +171,8 @@ protected:
     int removeEnergy(uint16_t amount);
     // Sets the energy of the current station
     int setEnergy(uint16_t amount);
+    // Gets the energy of the current station
+    uint16_t getEnergy();
     // Sets the visited status of the current station
     int setVisited(bool visited);
     // Sets the custom value of the current station
