@@ -118,6 +118,7 @@ char trait[5] = "RUMI";
 #define PN532_MISO (3)
 #define PN532_MOSI (4)
 #define PN532_SS   (5)
+
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 // Communication constants
