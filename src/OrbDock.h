@@ -46,13 +46,14 @@
 
 // Station constants
 #define NUM_STATIONS 14
-#define NUM_TRAITS 5
+#define NUM_TRAITS 6
 
 enum TraitId {
-    RUMINATE, SHAME, DOUBT, DISCONTENT, HOPELESS
+    NONE, RUMINATE, SHAME, DOUBT, DISCONTENT, HOPELESS
 };
 
 const char* const TRAIT_NAMES[] = {
+    "NONE",
     "RUMINATE",
     "SHAME",
     "DOUBT",
@@ -61,6 +62,7 @@ const char* const TRAIT_NAMES[] = {
 };
 
 const uint32_t TRAIT_COLORS[] = {
+    0xFF0000,  // None
     0xFF2800,  // Orange for RUMINATE (Rumination)
     0xFF4600,  // Yellow for SHAME (Shame Spiral)
     0x20FF00,  // Green for DOUBT (Self Doubt)
@@ -69,6 +71,7 @@ const uint32_t TRAIT_COLORS[] = {
 };
 
 const char* const TRAIT_COLOR_NAMES[] = {
+    "red",     // None
     "orange",  // Rumination
     "yellow",  // Shame Spiral
     "green",   // Self Doubt
@@ -77,13 +80,13 @@ const char* const TRAIT_COLOR_NAMES[] = {
 };
 
 enum StationId {
-    NONE, CONFIGURE, CONSOLE, DISTILLER, CASINO, FOREST,
+    GENERIC, CONFIGURE, CONSOLE, DISTILLER, CASINO, FOREST,
     ALCHEMY, PIPES, CHECKER, SLERP, RETOXIFY,
     GENERATOR, STRING, CHILL, HUNT
 };
 
 const char* const STATION_NAMES[] = {
-    "NONE", "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST",
+    "GENERIC", "CONFIGURE", "CONSOLE", "DISTILLER", "CASINO", "FOREST",
     "ALCHEMY", "PIPES", "CHECKER", "SLERP", "RETOXIFY",
     "GENERATOR", "STRING", "CHILL", "HUNT"
 };
@@ -97,7 +100,8 @@ struct Station {
 
 enum LEDPatternId {
     LED_PATTERN_NO_ORB,
-    LED_PATTERN_ORB_CONNECTED
+    LED_PATTERN_ORB_CONNECTED,
+    LED_PATTERN_FLASH
 };
 
 struct LEDPatternConfig {
@@ -118,6 +122,12 @@ const LEDPatternConfig LED_PATTERNS[] = {
         .id = LED_PATTERN_ORB_CONNECTED,
         .brightness = 255,
         .interval = 80,
+        .brightnessInterval = 5.0f
+    },
+    {
+        .id = LED_PATTERN_FLASH,
+        .brightness = 255,
+        .interval = 10,
         .brightnessInterval = 5.0f
     }
 };
@@ -195,11 +205,13 @@ private:
     bool isNFCActive();
     int isOrb();
     void printOrbInfo();
+    void endOrbSession();
 
     // LED pattern methods
     void runLEDPatterns();
     void led_rainbow();
     void led_trait_chase();
+    void led_flash();
     uint32_t dimColor(uint32_t color, uint8_t intensity);
     float lerp(float start, float end, float t);
 

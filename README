@@ -8,6 +8,9 @@ TROUBLESHOOTING:
  - remember to set Arduino IDE's Serial Monitor baud rate to 115200
  - Some docks use an old pinout - switch to the old PN532 pins in OrbDock.h
 
+See OrbDockBasic for a simple example of how to implement an orb dock for your station.
+To set your orb station, add it to main.cpp.
+
 PIN CONNECTIONS 
 
 PN532 RFID READER: 
@@ -36,7 +39,7 @@ For each station: Visited yes/no, and Energy 0-255
 TODO:
 - Communicate with external microcontroller
 - Slerp comms
-- Casino station
+- Allow gambling in Casino with all energy, not just station's energy
 - Jungle station
 - Alchemization station
 - Thought distiller station

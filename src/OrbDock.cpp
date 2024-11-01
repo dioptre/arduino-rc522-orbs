@@ -65,11 +65,7 @@ void OrbDock::loop() {
     if (isNFCConnected && isOrbConnected) {
         if (!isNFCActive()) {
             // Orb has disconnected
-            setLEDPattern(LED_PATTERN_NO_ORB);
-            isOrbConnected = false;
-            isNFCConnected = false;
-            isUnformattedNFC = false;
-            onOrbDisconnected();
+            endOrbSession();
         }
         return;
     }
@@ -94,6 +90,7 @@ void OrbDock::loop() {
                 isOrbConnected = true;
                 setLEDPattern(LED_PATTERN_ORB_CONNECTED);
                 readOrbInfo();
+                setVisited(true);
                 onOrbConnected();
                 break;
         }
@@ -157,6 +154,16 @@ void OrbDock::printOrbInfo() {
     Serial.println();
     Serial.println(F("*************************************************"));
     Serial.println();
+}
+
+void OrbDock::endOrbSession() {
+    setLEDPattern(LED_PATTERN_NO_ORB);
+    isOrbConnected = false;
+    isNFCConnected = false;
+    isUnformattedNFC = false;
+    reInitializeStations();
+    orbInfo.trait = TraitId::NONE;
+    onOrbDisconnected();
 }
 
 int OrbDock::writeStation(int stationId) {
@@ -267,6 +274,9 @@ int OrbDock::setEnergy(uint16_t energy) {
     Serial.println(STATION_NAMES[stationId]);
     orbInfo.stations[stationId].energy = energy;
     int result = writeStation(stationId);
+    if (result == STATUS_SUCCEEDED) {
+        setLEDPattern(LED_PATTERN_FLASH);
+    }
     return result;
 }
 
@@ -277,9 +287,7 @@ int OrbDock::addEnergy(uint16_t amount) {
     Serial.print(amount);
     Serial.print(F(" to energy for station "));
     Serial.println(STATION_NAMES[stationId]);
-    orbInfo.stations[stationId].energy = newEnergy;
-    int result = writeStation(stationId);
-    return result;
+    return setEnergy(newEnergy);
 }
 
 int OrbDock::removeEnergy(uint16_t amount) {
@@ -289,9 +297,7 @@ int OrbDock::removeEnergy(uint16_t amount) {
     Serial.print(amount);
     Serial.print(F(" from energy for station "));
     Serial.println(STATION_NAMES[stationId]);
-    orbInfo.stations[stationId].energy = newEnergy;
-    int result = writeStation(stationId);
-    return result;
+    return setEnergy(newEnergy);
 }
 
 int OrbDock::setCustom(byte value) {
@@ -435,17 +441,25 @@ void OrbDock::runLEDPatterns() {
             case LED_PATTERN_ORB_CONNECTED:
                 led_trait_chase();
                 break;
+            case LED_PATTERN_FLASH:
+                led_flash();
+                break;
             default:
-                strip.clear();
                 break;
         }
 
-        // Smooth brightness transitions
-        if (ledBrightness != ledPatternConfig.brightness && currentMillis - ledBrightnessPreviousMillis >= ledPatternConfig.brightnessInterval) {
-            ledBrightnessPreviousMillis = currentMillis;
-            ledBrightness = lerp(ledBrightness, ledPatternConfig.brightness, ledPatternConfig.brightnessInterval);
+        // Set brightness
+        if (ledBrightness != ledPatternConfig.brightness) {
+            ledBrightness = ledPatternConfig.brightness;
             strip.setBrightness(ledBrightness);
         }
+        // Smooth brightness transitions
+        // TODO: This causes a bunch of flickering jank. Figure out why.
+        // if (ledBrightness != ledPatternConfig.brightness && currentMillis - ledBrightnessPreviousMillis >= ledPatternConfig.brightnessInterval) {
+        //     ledBrightnessPreviousMillis = currentMillis;
+        //     ledBrightness = lerp(ledBrightness, ledPatternConfig.brightness, ledPatternConfig.brightnessInterval);
+        //     strip.setBrightness(ledBrightness);
+        // }
 
         strip.show();
     }
@@ -465,43 +479,6 @@ void OrbDock::led_rainbow() {
 
 // Rotates a weakening dot around the NeoPixel ring using the trait color
 void OrbDock::led_trait_chase() {
-//     static uint16_t currentPixel = 0;
-//     static uint8_t intensity = 255;
-//     static uint8_t globalIntensity = 0;
-//     static int8_t globalDirection = 1;
-    
-//     // Update global intensity
-//     globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
-//     if (globalIntensity >= 255 || globalIntensity <= 30) {
-//         globalDirection *= -1;
-//         globalIntensity = constrain(globalIntensity, 30, 255);
-//     }
-
-//     // Find the trait color
-//     uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)]; // Default to first trait
-    
-//     // Set the current pixel to trait color with current intensity
-//     uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
-//     strip.setPixelColor(currentPixel, dimColor(traitColor, adjustedIntensity));
-    
-//     // Set the next pixels with decreasing intensity
-//     for (int i = 1; i < NEOPIXEL_COUNT; i++) {
-//         uint16_t pixel = (currentPixel - i + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
-//         float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
-//         uint8_t fadeIntensity = round(intensity * fadeRatio);
-//         adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
-//         if (adjustedIntensity > 0) {
-//         strip.setPixelColor(pixel, dimColor(traitColor, adjustedIntensity));
-//         } else {
-//         break;  // Stop if intensity reaches 0
-//         }
-//     }
-//     // Move to next pixel
-//     currentPixel = (currentPixel + 1) % NEOPIXEL_COUNT;
-// }
-
-// // Rotates a weakening dot around the NeoPixel ring using the trait color
-// void OrbDock::led_trait_chase_two_dots() {
     static uint16_t currentPixel = 0;
     static uint8_t intensity = 255;
     static uint8_t globalIntensity = 0;
@@ -544,6 +521,62 @@ void OrbDock::led_trait_chase() {
     
     // Move to next pixel
     currentPixel = (currentPixel + 1) % NEOPIXEL_COUNT;
+}
+
+void OrbDock::led_flash() {
+    static uint8_t intensity = 255;
+    static int8_t intensityDirection = -1;
+    static uint16_t hueOffset = 0;
+    static bool cycleComplete = false;
+
+    // If cycle is complete, switch to appropriate pattern
+    if (cycleComplete) {
+        intensity = 255;
+        intensityDirection = -1;
+        hueOffset = 0;
+        cycleComplete = false;
+        if (isOrbConnected) {
+            setLEDPattern(LED_PATTERN_ORB_CONNECTED);
+        } else {
+            setLEDPattern(LED_PATTERN_NO_ORB);
+        }
+        return;
+    }
+
+    // Get base trait color and extract hue
+    uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+    uint8_t r = (uint8_t)(traitColor >> 16);
+    uint8_t g = (uint8_t)(traitColor >> 8); 
+    uint8_t b = (uint8_t)traitColor;
+
+    // Fast fade intensity
+    intensity += intensityDirection * 12;
+    if (intensity <= 30 || intensity >= 255) {
+        intensityDirection *= -1;
+        intensity = constrain(intensity, 30, 255);
+        if (intensity <= 30) {
+            cycleComplete = true;
+        }
+    }
+
+    // Rotate hue offset in opposite direction
+    hueOffset = (hueOffset - 8 + 360) % 360;
+
+    // Fill strip with hue-shifted colors
+    for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+        // Calculate hue offset for this pixel
+        uint16_t pixelHue = (hueOffset + (360 * i / NEOPIXEL_COUNT)) % 360;
+        
+        // Create color with similar hue to trait color but varying
+        float hueShift = sin(pixelHue * PI / 180.0) * 30; // +/- 30 degree hue shift
+        uint32_t shiftedColor = strip.Color(
+            r + (r * hueShift/360),
+            g + (g * hueShift/360),
+            b + (b * hueShift/360)
+        );
+
+        strip.setPixelColor(i, dimColor(shiftedColor, intensity));
+    }
 }
 
 // Helper function to dim a 32-bit color value by a certain intensity (0-255)
