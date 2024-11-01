@@ -1,15 +1,14 @@
 #include <Arduino.h>
-#include "OrbStationExample.cpp"
-#include "OrbStationConfigure.cpp"
+#include "OrbDockConfigurizer.cpp"
 
-OrbStationConfigure orbStation{};
+OrbDockConfigurizer orbDock{};
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) delay(10);
-    orbStation.begin();
+    orbDock.begin();
 }
 
 void loop() {
-    orbStation.loop();
+    orbDock.loop();
 }

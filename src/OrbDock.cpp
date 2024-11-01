@@ -1,8 +1,8 @@
-#include "OrbStation.h"
+#include "OrbDock.h"
 
 
 // Constructor
-OrbStation::OrbStation(StationId id) :
+OrbDock::OrbDock(StationId id) :
     strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
     nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS) {
     // Initialize member variables
@@ -15,11 +15,11 @@ OrbStation::OrbStation(StationId id) :
 }
 
 // Destructor
-OrbStation::~OrbStation() {
+OrbDock::~OrbDock() {
     // Cleanup code if needed
 }
 
-void OrbStation::begin() {
+void OrbDock::begin() {
     // Initialize NeoPixel strip
     strip.begin();
     strip.setBrightness(0);
@@ -48,7 +48,7 @@ void OrbStation::begin() {
     Serial.println(F("Put your orbs in me!"));
 }
 
-void OrbStation::loop() {
+void OrbDock::loop() {
     currentMillis = millis();
 
     // Run LED patterns
@@ -100,7 +100,7 @@ void OrbStation::loop() {
     }
 }
 
-bool OrbStation::isNFCPresent() {
+bool OrbDock::isNFCPresent() {
     uint8_t uid[7];  // Buffer to store the returned UID
     uint8_t uidLength;
     if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 30)) {
@@ -115,7 +115,7 @@ bool OrbStation::isNFCPresent() {
 }
 
 // Check if an Orb NFC is connected by reading the orb page
-bool OrbStation::isNFCActive() {
+bool OrbDock::isNFCActive() {
   // See if we can read the orb page
   int checkStatus = isOrb();
   if (checkStatus == STATUS_FAILED) {
@@ -125,7 +125,7 @@ bool OrbStation::isNFCActive() {
 }
 
 // Whether the connected NFC is formatted as an orb
-int OrbStation::isOrb() {
+int OrbDock::isOrb() {
     if (readPage(ORBS_PAGE) == STATUS_FAILED) {
         Serial.println(F("Failed to read data from NFC"));
         return STATUS_FAILED;
@@ -138,7 +138,7 @@ int OrbStation::isOrb() {
 }
 
 // Print station information
-void OrbStation::printOrbInfo() {
+void OrbDock::printOrbInfo() {
     Serial.println(F("\n*************************************************"));
     Serial.print(F("Trait: "));
     Serial.print(getTraitName());
@@ -159,7 +159,7 @@ void OrbStation::printOrbInfo() {
     Serial.println();
 }
 
-int OrbStation::writeStation(int stationId) {
+int OrbDock::writeStation(int stationId) {
     // Prepare the page buffer with station data
     page_buffer[0] = orbInfo.stations[stationId].visited ? 1 : 0;
     page_buffer[1] = orbInfo.stations[stationId].energy;
@@ -175,7 +175,7 @@ int OrbStation::writeStation(int stationId) {
     return STATUS_SUCCEEDED;
 }
 
-int OrbStation::writePage(int page, uint8_t* data) {
+int OrbDock::writePage(int page, uint8_t* data) {
     int retryCount = 0;
     while (retryCount < MAX_RETRIES) {
         Serial.print(F("Writing to page "));
@@ -198,7 +198,7 @@ int OrbStation::writePage(int page, uint8_t* data) {
     return STATUS_FAILED;
 }
 
-int OrbStation::readPage(int page) {
+int OrbDock::readPage(int page) {
     int retryCount = 0;
     while (retryCount < MAX_RETRIES) {
         if (nfc.ntag2xx_ReadPage(page, page_buffer)) {
@@ -218,7 +218,7 @@ int OrbStation::readPage(int page) {
 }
 
 // Read and print the entire NFC storage
-void OrbStation::printNFCStorage() {
+void OrbDock::printNFCStorage() {
     // Read the entire NFC storage
     for (int i = 0; i < 45; i++) {
         if (readPage(i) == STATUS_FAILED) {
@@ -237,12 +237,12 @@ void OrbStation::printNFCStorage() {
 }
 
 // Returns the trait name
-const char* OrbStation::getTraitName() {
+const char* OrbDock::getTraitName() {
     return TRAIT_NAMES[static_cast<int>(orbInfo.trait)];
 }
 
 // Writes the trait to the orb
-int OrbStation::setTrait(TraitId newTrait) {
+int OrbDock::setTrait(TraitId newTrait) {
     Serial.print(F("Setting trait to "));
     Serial.println(TRAIT_NAMES[static_cast<int>(newTrait)]);
     orbInfo.trait = newTrait;
@@ -251,7 +251,7 @@ int OrbStation::setTrait(TraitId newTrait) {
     return writePage(TRAIT_PAGE, page_buffer);
 }
 
-int OrbStation::setVisited(bool visited) {
+int OrbDock::setVisited(bool visited) {
     Serial.print(F("Setting visited to "));
     Serial.print(visited ? "true" : "false");
     Serial.print(F(" for station "));
@@ -260,7 +260,7 @@ int OrbStation::setVisited(bool visited) {
     return writeStation(stationId);
 }
 
-int OrbStation::setEnergy(byte energy) {
+int OrbDock::setEnergy(byte energy) {
     Serial.print(F("Setting energy to "));
     Serial.println(energy);
     Serial.print(F(" for station "));
@@ -270,7 +270,7 @@ int OrbStation::setEnergy(byte energy) {
     return result;
 }
 
-int OrbStation::addEnergy(byte amount) {
+int OrbDock::addEnergy(byte amount) {
     int newEnergy = orbInfo.stations[stationId].energy + amount;
     if (newEnergy > 255) newEnergy = 255;
     Serial.print(F("Adding "));
@@ -282,7 +282,7 @@ int OrbStation::addEnergy(byte amount) {
     return result;
 }
 
-int OrbStation::removeEnergy(byte amount) {
+int OrbDock::removeEnergy(byte amount) {
     int newEnergy = orbInfo.stations[stationId].energy - amount;
     if (newEnergy < 0) newEnergy = 0;
     Serial.print(F("Removing "));
@@ -294,7 +294,7 @@ int OrbStation::removeEnergy(byte amount) {
     return result;
 }
 
-int OrbStation::setCustom1(byte value) {
+int OrbDock::setCustom1(byte value) {
     Serial.print(F("Setting custom1 to "));
     Serial.println(value);
     Serial.print(F(" for station "));
@@ -304,7 +304,7 @@ int OrbStation::setCustom1(byte value) {
     return result;
 }
 
-int OrbStation::setCustom2(byte value) {
+int OrbDock::setCustom2(byte value) {
     Serial.print(F("Setting custom2 to "));
     Serial.println(value);
     Serial.print(F(" for station "));
@@ -314,7 +314,7 @@ int OrbStation::setCustom2(byte value) {
     return result;
 }
 
-byte OrbStation::getTotalEnergy() {
+byte OrbDock::getTotalEnergy() {
     byte totalEnergy = 0;
     for (int i = 0; i < NUM_STATIONS; i++) {
         totalEnergy += orbInfo.stations[i].energy;
@@ -322,17 +322,17 @@ byte OrbStation::getTotalEnergy() {
     return totalEnergy;
 }
 
-Station OrbStation::getCurrentStationInfo() {
+Station OrbDock::getCurrentStationInfo() {
     return orbInfo.stations[stationId];
 }
 
-void OrbStation::handleError(const char* message) {
+void OrbDock::handleError(const char* message) {
     Serial.println(message);
     onError(message);
 }
 
 // Formats the NFC with "ORBS" header, default station information and given trait
-int OrbStation::formatNFC(TraitId trait) {
+int OrbDock::formatNFC(TraitId trait) {
     Serial.println(F("Formatting NFC with ORBS header, default station information and given trait..."));
     // Write header
     memcpy(page_buffer, ORBS_HEADER, 4);
@@ -351,7 +351,7 @@ int OrbStation::formatNFC(TraitId trait) {
 }
 
 // Set the orb to default station information - zero energy, not visited
-int OrbStation::resetOrb() {
+int OrbDock::resetOrb() {
     Serial.println("Initializing orb with default station information...");
     reInitializeStations();
     int status = writeStations();
@@ -368,7 +368,7 @@ int OrbStation::resetOrb() {
 }
 
 // Initialize stations information to default values
-void OrbStation::reInitializeStations() {
+void OrbDock::reInitializeStations() {
     Serial.println(F("Initializing stations information to default values..."));
     for (int i = 0; i < NUM_STATIONS; i++) {
         orbInfo.stations[i] = {false, 0, 0, 0};
@@ -376,7 +376,7 @@ void OrbStation::reInitializeStations() {
 }
 
 // Read station information and trait from orb
-int OrbStation::readOrbInfo() {
+int OrbDock::readOrbInfo() {
     Serial.println("Reading trait and station information from orb...");
     
     // Read stations
@@ -403,7 +403,7 @@ int OrbStation::readOrbInfo() {
 }
 
 // Write station information and trait to orb
-int OrbStation::writeOrbInfo() {
+int OrbDock::writeOrbInfo() {
     Serial.println("Writing stations to orb...");
     writeStations();
     setTrait(orbInfo.trait);
@@ -412,7 +412,7 @@ int OrbStation::writeOrbInfo() {
 }
 
 // Write station data
-int OrbStation::writeStations() {
+int OrbDock::writeStations() {
     for (int i = 0; i < NUM_STATIONS; i++) {
         if (writeStation(i) == STATUS_FAILED) {
             return STATUS_FAILED;
@@ -423,11 +423,11 @@ int OrbStation::writeStations() {
 
 /********************** LED FUNCTIONS *****************************/
 
-void OrbStation::setLEDPattern(LEDPatternId patternId) {
+void OrbDock::setLEDPattern(LEDPatternId patternId) {
     ledPatternConfig = LED_PATTERNS[patternId];
 }
 
-void OrbStation::runLEDPatterns() {
+void OrbDock::runLEDPatterns() {
     static unsigned long ledPreviousMillis;
     static uint8_t ledBrightness;
     static unsigned long ledBrightnessPreviousMillis;
@@ -460,7 +460,7 @@ void OrbStation::runLEDPatterns() {
 }
 
 // Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
-void OrbStation::led_rainbow() {
+void OrbDock::led_rainbow() {
     static long firstPixelHue = 0;
     if (firstPixelHue < 5*65536) {
       strip.rainbow(firstPixelHue, 1, 255, 255, true);
@@ -471,7 +471,7 @@ void OrbStation::led_rainbow() {
 }
 
 // Rotates a weakening dot around the NeoPixel ring using the trait color
-void OrbStation::led_trait_chase() {
+void OrbDock::led_trait_chase() {
     static uint16_t currentPixel = 0;
     static uint8_t intensity = 255;
     static uint8_t globalIntensity = 0;
@@ -508,7 +508,7 @@ void OrbStation::led_trait_chase() {
 }
 
 // Helper function to dim a 32-bit color value by a certain intensity (0-255)
-uint32_t OrbStation::dimColor(uint32_t color, uint8_t intensity) {
+uint32_t OrbDock::dimColor(uint32_t color, uint8_t intensity) {
   uint8_t r = (uint8_t)(color >> 16);
   uint8_t g = (uint8_t)(color >> 8);
   uint8_t b = (uint8_t)color;
@@ -520,7 +520,7 @@ uint32_t OrbStation::dimColor(uint32_t color, uint8_t intensity) {
   return strip.Color(r, g, b);
 }
 
-float OrbStation::lerp(float start, float end, float t) {
+float OrbDock::lerp(float start, float end, float t) {
     return start + t * (end - start);
 }
 

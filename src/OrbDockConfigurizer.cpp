@@ -12,10 +12,10 @@
  * S4: D11    // Format orb button
  */
 
-#include "OrbStation.h"
+#include "OrbDock.h"
 #include "ButtonDisplay.cpp"
 
-class OrbStationConfigure : public OrbStation {
+class OrbDockConfigurizer : public OrbDock {
 private:
 
     // See https://github.com/olikraus/u8glib/wiki/fontsize
@@ -45,18 +45,18 @@ private:
     }
 
 public:
-    OrbStationConfigure() : OrbStation(StationId::CONFIGURE) {
+    OrbDockConfigurizer() : OrbDock(StationId::CONFIGURE) {
         selectedTrait = TraitId::RUMINATE;
     }
 
     void begin() {
-        OrbStation::begin();
+        OrbDock::begin();
         display.begin();
         updateDisplay();
     }
 
     void loop() override {
-        OrbStation::loop();
+        OrbDock::loop();
 
         // Handle button inputs
         if (display.isButton1Pressed()) {
@@ -86,7 +86,7 @@ public:
             updateDisplay();
         }
 
-        if (display.isButton4Pressed()) {
+        if (display.isButton4Pressed() && isNFCConnected) {
             Serial.println(F("Format orb"));
             formatNFC(selectedTrait);
             delay(200);

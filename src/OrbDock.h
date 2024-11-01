@@ -121,10 +121,10 @@ struct OrbInfo {
     Station stations[NUM_STATIONS];
 };
 
-class OrbStation {
+class OrbDock {
 public:
-    OrbStation(StationId id);
-    virtual ~OrbStation();
+    OrbDock(StationId id);
+    virtual ~OrbDock();
     
     void begin();
     virtual void loop();
@@ -133,6 +133,7 @@ protected:
     // State variables
     StationId stationId;
     OrbInfo orbInfo;
+    bool isNFCConnected;
     bool isOrbConnected;
     bool isUnformattedNFC;
     
@@ -206,7 +207,6 @@ private:
     LEDPatternConfig ledPatternConfig;
     
     // NFC
-    bool isNFCConnected;
     byte page_buffer[4];
 };
 
