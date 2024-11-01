@@ -14,16 +14,12 @@ PN532 RFID READER:
     - 5V -> 5V
     - GND -> GND
     - SCK  -> Digital 2
-    - MOSI -> Digital 3
-    - SS   -> Digital 4
-    - MISO -> Digital 5
+    - MISO -> Digital 3
+    - MOSI -> Digital 4
+    - SS   -> Digital 5
   
 NEOPIXEL RING:
  - Data out -> Digital 6
-
-ADDITIONAL CONNECTIONS (OPTIONAL):
- - LED_SHIELD -> Digital 11 (for both Nano/Uno and Mega)
- - BUTTON -> Digital 2 (for both Nano/Uno and Mega)
 
 STATIONS
 Can store information for up to 16 stations. (NOTE: May change this to 10 so we only need 1 page per station)
@@ -53,16 +49,6 @@ TODO:
 #include <Adafruit_NeoPixel.h>
 
 
-// Status LED constants
-#define LED_BUILTIN 13                      // Arduino LED pin
-
-// Button constants
-#define BUTTON 2                            // Button pin 
-#define PRESSED LOW
-#define RELEASED HIGH
-bool buttonDetected = false;                // Tracks if a button is detected on startup
-int buttonState = 0;
-
 // NeoPixel LED ring
 #define NEOPIXEL_PIN    6                   // NeoPixel pin
 #define NEOPIXEL_COUNT  24                  // Number of NeoPixels
@@ -70,10 +56,6 @@ int buttonState = 0;
 Adafruit_NeoPixel strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 // Tracking patterns
 unsigned long pixelPrevious = 0;            // Previous Pixel Millis
-unsigned long patternPrevious = 0;          // Previous Pattern Millis
-int           patternCurrent = 0;           // Current Pattern Number
-int           patternInterval = 5000;       // Pattern Interval (ms)
-bool          patternComplete = false;
 uint8_t       pixelBrightness = 25;         // Max 255
 uint8_t       targetBrightness = 25;        // Max 255
 // Tracking pixels and pixel timing
@@ -85,13 +67,12 @@ uint16_t      pixelNumber = NEOPIXEL_COUNT; // Total Number of Pixels
 enum LEDPattern {
   LED_PATTERN_NONE,
   LED_PATTERN_NO_ORB,
-  LED_PATTERN_ORB_CONNECTED,
-  LED_PATTERN_ORB_READING,
-  LED_PATTERN_ORB_WRITING,
-  LED_PATTERN_ORB_ERROR,
+  LED_PATTERN_ORB_CONNECTED
 };
 // Current LED pattern
 LEDPattern currentLEDPattern = LED_PATTERN_NO_ORB;
+#define LED_BRIGHTNESS_NO_ORB 50
+#define LED_BRIGHTNESS_ORB_CONNECTED 100;
 
 // Status constants
 #define STATUS_FAILED    0
@@ -135,8 +116,9 @@ char trait[5] = "RUMI";
 // NFC/RFID Reader - PN532 with software SPI
 #define PN532_SCK  (2)
 #define PN532_MISO (3)
-#define PN532_MOSI   (4)
-#define PN532_SS (5)
+#define PN532_MOSI (4)
+#define PN532_SS   (5)
+
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 // Communication constants
@@ -173,9 +155,6 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
 
-  // Detect if a button is connected and initialize if so
-  detectButton();
-
   // Initialize NeoPixel LED ring
   strip.begin();                          // Initialize NeoPixel strip object
   strip.show();                           // Turn OFF all pixels ASAP
@@ -186,7 +165,15 @@ void setup() {
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (!versiondata) {
     Serial.println("Didn't find PN532 module, won't start.");
-    while (1);                            // Halt the program if PN532 isn't found
+    // Flash the NeoPixel ring red to indicate error
+    while (1) {
+      strip.fill(strip.Color(255, 0, 0));  // Set all pixels to red
+      strip.show();
+      delay(500);                          // Wait 500ms
+      strip.clear();                       // Turn off all pixels
+      strip.show();
+      delay(500);                          // Wait 500ms
+    }
   }
   nfc.SAMConfig();                        // Configure the PN532 to read RFID tags
   nfc.setPassiveActivationRetries(0x11);  // Set the max number of retry attempts to read from a card
@@ -245,6 +232,8 @@ void loop() {
 
   // Set the LED pattern to show the Orb's trait
   currentLEDPattern = LED_PATTERN_ORB_CONNECTED;
+  strip.setBrightness(0);
+  targetBrightness = LED_BRIGHTNESS_ORB_CONNECTED;
 
   // TODO: Send a signal to the attached Raspberry Pi with station information and orb trait
 
@@ -276,27 +265,15 @@ void loop() {
 
     // Run NeoPixel LED ring patterns
     runLEDPatterns();
-
-    // Check the button if one was detected
-    if (buttonDetected && digitalRead(BUTTON) == PRESSED) {
-      // Update stations - just a test for now
-      int updateStationsStatus = testUpdateStations();
-      if (updateStationsStatus == STATUS_FAILED) {
-        break;  // Exit the loop if update fails
-      }
-      readStations();
-
-      // Debounce button
-      while (digitalRead(BUTTON) == PRESSED) {
-        delay(50);
-      }
-    }
   }
 
   // ORB DISCONNECTED
   // Reset various variables so they don't polluate other orbs
   Serial.println("Orb disconnected, ending session...");
   // TODO: Send a signal to the attached Raspberry Pi that orb has disconnected
+  // Set current brightness so we don't get a flash
+  targetBrightness = LED_BRIGHTNESS_NO_ORB;
+  strip.setBrightness(targetBrightness);
   currentLEDPattern = LED_PATTERN_NO_ORB;
   //memset(full_buffer, 0, sizeof(full_buffer));
   memset(page_buffer, 0, sizeof(page_buffer));
@@ -570,39 +547,6 @@ bool isNFCActive() {
 }
 
 
-// Print the entire contents of the NFC card
-void printDebugInfo() {
-
-  for (uint8_t i = 0; i < 42; i++) {
-    bool success = nfc.ntag2xx_ReadPage(i, page_buffer);
-
-    // Display the current page number
-    Serial.print("PAGE ");
-    if (i < 10)
-    {
-      Serial.print("0");
-      Serial.print(i);
-    }
-    else
-    {
-      Serial.print(i);
-    }
-    Serial.print(": ");
-
-    // Display the results, depending on 'success'
-    if (success)
-    {
-      // Dump the page data
-      nfc.PrintHexChar(page_buffer, 4);
-    }
-    else
-    {
-      Serial.println("Unable to read the requested page!");
-    }
-  }
-}
-
-
 /********************** LED FUNCTIONS *****************************/
 
 
@@ -614,19 +558,10 @@ void runLEDPatterns() {
 
     switch (currentLEDPattern) {
       case LED_PATTERN_NO_ORB:
-        rainbow(10);  // Adjust the wait time as needed
+        led_rainbow(15);  // Adjust the wait time as needed
         break;
       case LED_PATTERN_ORB_CONNECTED:
-        rotateWeakeningMagentaDotWithPulse(50);
-        break;
-      case LED_PATTERN_ORB_READING:
-        theaterChase(strip.Color(0, 255, 0), 100);
-        break;
-      case LED_PATTERN_ORB_WRITING:
-        theaterChase(strip.Color(255, 0, 0), 100);
-        break;
-      case LED_PATTERN_ORB_ERROR:
-        theaterChase(strip.Color(255, 0, 255), 100);
+        led_trait_chase(100);
         break;
       case LED_PATTERN_NONE:
       default:
@@ -638,11 +573,13 @@ void runLEDPatterns() {
   }
 
   // Move brightness towards target brightness
-  static uint8_t brightnessInterval = 1;
-  static uint8_t brightnessPrevious = pixelBrightness;
-  if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= brightnessInterval) {
+  static float brightnessInterval = 0.1;  // Smaller interval for smoother transitions
+  static unsigned long brightnessPrevious = currentMillis;
+  static float currentBrightness = pixelBrightness;
+  if (pixelBrightness != targetBrightness && currentMillis - brightnessPrevious >= 1) {  // Check every millisecond
     brightnessPrevious = currentMillis;
-    pixelBrightness += (pixelBrightness < targetBrightness) ? 1 : -1;
+    currentBrightness += (pixelBrightness < targetBrightness) ? brightnessInterval : -brightnessInterval;
+    pixelBrightness = (uint8_t)currentBrightness;  // Convert float to uint8_t for actual brightness
     strip.setBrightness(pixelBrightness);
     strip.show();
   }
@@ -650,30 +587,17 @@ void runLEDPatterns() {
 
 
 // Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
-void rainbow(int wait) {
+void led_rainbow(int wait) {
   static unsigned long lastUpdate = 0;
   static long firstPixelHue = 0;
 
   pixelInterval = wait;
-  targetBrightness = 50;
+  targetBrightness = LED_BRIGHTNESS_NO_ORB;
 
   if (currentMillis - lastUpdate >= wait) {
     lastUpdate = currentMillis;
-
-    // Hue of first pixel runs 5 complete loops through the color wheel.
-    // Color wheel has a range of 65536 but it's OK if we roll over, so
-    // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
-    // means we'll make 5*65536/256 = 1280 passes through this loop:
     if (firstPixelHue < 5*65536) {
-      // strip.rainbow() can take a single argument (first pixel hue) or
-      // optionally a few extras: number of rainbow repetitions (default 1),
-      // saturation and value (brightness) (both 0-255, similar to the
-      // ColorHSV() function, default 255), and a true/false flag for whether
-      // to apply gamma correction to provide 'truer' colors (default true).
-      strip.rainbow(firstPixelHue);
-      // Above line is equivalent to:
-      // strip.rainbow(firstPixelHue, 1, 255, 255, true);
-      //strip.show(); // Update strip with new contents
+      strip.rainbow(firstPixelHue, 1, 255, 255, true);
       firstPixelHue += 256;
     } else {
       firstPixelHue = 0; // Reset for next cycle
@@ -682,102 +606,15 @@ void rainbow(int wait) {
 }
 
 
-// Cycle through each trait color
-void cycleTraitColors(int wait) {
-  static uint8_t colorIndex = 0;
-  static unsigned long lastColorChange = 0;
-  static bool colorChanged = false;
-  
-  pixelInterval = wait;  // Update delay time
-  targetBrightness = 255;
-
-  if (!colorChanged) {
-    // Set all pixels to the current trait color
-    for(uint16_t i = 0; i < pixelNumber; i++) {
-      strip.setPixelColor(i, traitColors[colorIndex]);
-    }
-    colorChanged = true;
-    lastColorChange = currentMillis;
-  }
-
-  // Move to the next color after 2000ms
-  if (currentMillis - lastColorChange >= 2000) {
-    colorIndex = (colorIndex + 1) % NUM_TRAITS;
-    colorChanged = false;
-  }
-}
-
-
-// Fade between all trait color
-void fadeTraitColors(int wait) {
-  static uint8_t colorIndex = 0;
-  static uint8_t fadeStep = 0;
-  static uint32_t currentColor = traitColors[0];
-  static uint32_t nextColor = traitColors[1];
-  static uint8_t fadeSpeed = 64;
-  
-  pixelInterval = wait;  // Update delay time
-  targetBrightness = 100;
-
-  // Adjust fade speed by changing the divisor (higher number = slower fade)
-  uint8_t r = (((nextColor >> 16) & 0xFF) * fadeStep + ((currentColor >> 16) & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
-  uint8_t g = (((nextColor >> 8) & 0xFF) * fadeStep + ((currentColor >> 8) & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
-  uint8_t b = ((nextColor & 0xFF) * fadeStep + (currentColor & 0xFF) * (fadeSpeed - fadeStep)) / fadeSpeed;
-  uint32_t fadeColor = strip.Color(r, g, b);
-
-  // Set all pixels to the fade color
-  for(uint16_t i = 0; i < pixelNumber; i++) {
-    strip.setPixelColor(i, fadeColor);
-  }
-
-  fadeStep++;
-  if (fadeStep >= fadeSpeed) {
-    fadeStep = 0;
-    colorIndex = (colorIndex + 1) % NUM_TRAITS;
-    currentColor = nextColor;
-    nextColor = traitColors[colorIndex];
-    delay(2000);
-  }
-}
-
-
-// Rotates a weakening magenta dot around the NeoPixel ring
-void rotateWeakeningMagentaDot(int wait) {
-  static uint16_t currentPixel = 0;
-  static uint8_t intensity = 255;
-  
-  pixelInterval = wait;  // Update delay time
-  targetBrightness = 200;
-  
-  // Set the current pixel to magenta with current intensity
-  strip.setPixelColor(currentPixel, strip.Color(intensity, 0, intensity));
-  
-  // Set the next pixels with decreasing intensity
-  for (int i = 1; i < NEOPIXEL_COUNT; i++) {
-    uint16_t pixel = (currentPixel - i + pixelNumber) % pixelNumber;
-    float fadeRatio = pow(float(NEOPIXEL_COUNT - i) / NEOPIXEL_COUNT, 2);  // Quadratic fade
-    uint8_t fadeIntensity = round(intensity * fadeRatio);
-    if (fadeIntensity > 0) {
-      strip.setPixelColor(pixel, strip.Color(fadeIntensity, 0, fadeIntensity));
-    } else {
-      break;  // Stop if intensity reaches 0
-    }
-  }
-  
-  // Move to next pixel
-  currentPixel = (currentPixel + 1) % pixelNumber;
-}
-
-
-// Rotates a weakening red dot around the NeoPixel ring
-void rotateWeakeningMagentaDotWithPulse(int wait) {
+// Rotates a weakening dot around the NeoPixel ring using the trait color
+void led_trait_chase(int wait) {
   static uint16_t currentPixel = 0;
   static uint8_t intensity = 255;
   static uint8_t globalIntensity = 0;
   static int8_t globalDirection = 1;
   
   pixelInterval = wait;  // Update delay time
-  targetBrightness = 255;
+  targetBrightness = LED_BRIGHTNESS_ORB_CONNECTED;
   
   // Update global intensity
   globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
@@ -785,10 +622,19 @@ void rotateWeakeningMagentaDotWithPulse(int wait) {
     globalDirection *= -1;
     globalIntensity = constrain(globalIntensity, 30, 255);
   }
+
+  // Find the trait color
+  uint32_t traitColor = traitColors[0]; // Default to first trait
+  for(int i = 0; i < NUM_TRAITS; i++) {
+    if(strcmp(trait, traits[i]) == 0) {
+      traitColor = traitColors[i];
+      break;
+    }
+  }
   
-  // Set the current pixel to magenta with current intensity
+  // Set the current pixel to trait color with current intensity
   uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
-  strip.setPixelColor(currentPixel, strip.Color(adjustedIntensity, 0, adjustedIntensity));
+  strip.setPixelColor(currentPixel, dimColor(traitColor, adjustedIntensity));
   
   // Set the next pixels with decreasing intensity
   for (int i = 1; i < NEOPIXEL_COUNT; i++) {
@@ -797,7 +643,7 @@ void rotateWeakeningMagentaDotWithPulse(int wait) {
     uint8_t fadeIntensity = round(intensity * fadeRatio);
     adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
     if (adjustedIntensity > 0) {
-      strip.setPixelColor(pixel, strip.Color(adjustedIntensity, 0, adjustedIntensity));
+      strip.setPixelColor(pixel, dimColor(traitColor, adjustedIntensity));
     } else {
       break;  // Stop if intensity reaches 0
     }
@@ -807,212 +653,17 @@ void rotateWeakeningMagentaDotWithPulse(int wait) {
 }
 
 
-// Creates a pulsating effect on each pixel independently
-void pulsatingPixels(int wait) {
-  static uint8_t pixelIntensities[NEOPIXEL_COUNT];
-  static int8_t pixelDirections[NEOPIXEL_COUNT];
+// Helper function to dim a 32-bit color value by a certain intensity (0-255)
+uint32_t dimColor(uint32_t color, uint8_t intensity) {
+  uint8_t r = (uint8_t)(color >> 16);
+  uint8_t g = (uint8_t)(color >> 8);
+  uint8_t b = (uint8_t)color;
   
-  pixelInterval = wait;  // Update delay time
-  targetBrightness = 200;
+  r = (r * intensity) >> 8;
+  g = (g * intensity) >> 8;
+  b = (b * intensity) >> 8;
   
-  // Initialize intensities and directions if not done
-  static bool initialized = false;
-  if (!initialized) {
-    for (int i = 0; i < pixelNumber; i++) {
-      pixelIntensities[i] = random(256);  // Start with random intensities
-      pixelDirections[i] = random(2) * 2 - 1;  // Either 1 or -1
-    }
-    initialized = true;
-  }
-  
-  // Update and set the intensity for each pixel
-  for (int i = 0; i < pixelNumber; i++) {
-    // Update intensity
-    pixelIntensities[i] += pixelDirections[i] * 5;  // Adjust 5 to change speed
-    
-    // Change direction if at max or min
-    if (pixelIntensities[i] >= 255 || pixelIntensities[i] <= 0) {
-      pixelDirections[i] *= -1;
-      pixelIntensities[i] = constrain(pixelIntensities[i], 0, 255);
-    }
-    
-    // Set the pixel color (using red in this example)
-    strip.setPixelColor(i, strip.Color(pixelIntensities[i], 0, 0));
-  }
-  
-  strip.show();
+  return strip.Color(r, g, b);
 }
-
-// Creates a uniform fading effect on all pixels
-void uniformFading(uint32_t color, int wait) {
-  static uint8_t intensity = 0;
-  static int8_t direction = 1;
-  
-  pixelInterval = wait;  // Update delay time
-  targetBrightness = 200;
-  
-  // Update intensity
-  intensity += direction * 3;  // Adjust 5 to change fade speed
-  
-  // Change direction if at max or min
-  if (intensity >= 255 || intensity <= 0) {
-    direction *= -1;
-    intensity = constrain(intensity, 0, 255);
-  }
-  
-  // Extract RGB components from the color argument
-  uint8_t r = (color >> 16) & 0xFF;
-  uint8_t g = (color >> 8) & 0xFF;
-  uint8_t b = color & 0xFF;
-  
-  // Set all pixels to the same intensity, using the color argument
-  for (int i = 0; i < pixelNumber; i++) {
-    uint8_t fadedR = (r * intensity) / 255;
-    uint8_t fadedG = (g * intensity) / 255;
-    uint8_t fadedB = (b * intensity) / 255;
-    strip.setPixelColor(i, strip.Color(fadedR, fadedG, fadedB));
-  }
-  
-  strip.show();
-}
-
-// Fill strip pixels one after another with a color. Strip is NOT cleared
-// first; anything there will be covered pixel by pixel. Pass in color
-// (as a single 'packed' 32-bit value, which you can get by calling
-// strip.Color(red, green, blue) as shown in the loop() function above),
-// and a delay time (in milliseconds) between pixels.
-void colorWipe(uint32_t color, int wait) {
-  static uint16_t current_pixel = 0;
-  pixelInterval = wait;                        //  Update delay time
-  strip.setPixelColor(current_pixel++, color); //  Set pixel's color (in RAM)
-  strip.show();                                //  Update strip to match
-  if(current_pixel >= pixelNumber) {           //  Loop the pattern from the first LED
-    current_pixel = 0;
-    patternComplete = true;
-  }
-}
-
-
-// Theater-marquee-style chasing lights. Pass in a color (32-bit value,
-// a la strip.Color(r,g,b) as mentioned above), and a delay time (in ms)
-// between frames.
-void theaterChase(uint32_t color, int wait) {
-
-  static uint32_t loop_count = 0;
-  static uint16_t current_pixel = 0;
-
-  pixelInterval = wait;                   //  Update delay time
-
-  strip.clear();
-
-  for(int c=current_pixel; c < pixelNumber; c += 3) {
-    strip.setPixelColor(c, color);
-  }
-  strip.show();
-
-  current_pixel++;
-  if (current_pixel >= 3) {
-    current_pixel = 0;
-    loop_count++;
-  }
-
-  if (loop_count >= 10) {
-    current_pixel = 0;
-    loop_count = 0;
-    patternComplete = true;
-  }
-}
-
-
-// Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
-void rainbow(uint8_t wait) {
-
-  if(pixelInterval != wait)
-    pixelInterval = wait;                   
-  for(uint16_t i=0; i < pixelNumber; i++) {
-    strip.setPixelColor(i, Wheel((i + pixelCycle) & 255)); //  Update delay time  
-  }
-  strip.show();                             //  Update strip to match
-  pixelCycle++;                             //  Advance current cycle
-  if(pixelCycle >= 256)
-    pixelCycle = 0;                         //  Loop the cycle back to the begining
-}
-
-
-//Theatre-style crawling lights with rainbow effect
-void theaterChaseRainbow(uint8_t wait) {
-
-  if(pixelInterval != wait)
-    pixelInterval = wait;                   //  Update delay time  
-  for(int i=0; i < pixelNumber; i+=3) {
-    strip.setPixelColor(i + pixelQueue, Wheel((i + pixelCycle) % 255)); //  Update delay time  
-  }
-  strip.show();
-  for(int i=0; i < pixelNumber; i+=3) {
-    strip.setPixelColor(i + pixelQueue, strip.Color(0, 0, 0)); //  Update delay time  
-  }      
-  pixelQueue++;                           //  Advance current queue  
-  pixelCycle++;                           //  Advance current cycle
-  if(pixelQueue >= 3)
-    pixelQueue = 0;                       //  Loop
-  if(pixelCycle >= 256)
-    pixelCycle = 0;                       //  Loop
-}
-
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-
-  WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  }
-  if(WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
-  WheelPos -= 170;
-  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
-
 
 /********************** MISC FUNCTIONS *****************************/
-
-
-// Dump a byte array as hex values to Serial.
-void printHex(byte *buffer, byte bufferSize) {
-
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
-}
-
-
-// Flash the LED on the shield
-void flashLED() {
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(50);
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(50);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(50);
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(50);
-}
-
-// Detect if the button is pressed
-void detectButton() {
-    // Enable internal pull-up resistor
-    pinMode(BUTTON, INPUT_PULLUP);
-
-    // Check if button is high (not pressed, due to pull-up)
-    if (digitalRead(BUTTON) == HIGH) {
-        buttonDetected = false;
-        Serial.println("No button detected");
-    } else {
-        buttonDetected = true;
-        Serial.println("Button detected");
-    }
-}

@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "arduino-rc522-orbs",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
