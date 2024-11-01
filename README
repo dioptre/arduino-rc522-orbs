@@ -1,0 +1,42 @@
+ORB DOCK - ORB NFC READER, NEOPIXEL RING CONTROL AND COMMUNICATION WITH EXTERNAL MICROCONTROLLERS VIA USB
+
+For orb and dock details, see https://docs.google.com/document/d/15TdBDqpzjQM84aWcbPIud8OpBZvtFHylhdnx2yqqLoc
+
+TROUBLESHOOTING:
+IMPORTANT - remember to set the switches on the PN532 to the "SPI" position - left/1 down, right/2 up
+IMPORTANT - remember to set Arduino IDE's Serial Monitor baud rate to 115200
+
+PIN CONNECTIONS 
+
+PN532 RFID READER: 
+  - ARDUINO NANO/UNO:
+    - 5V -> 5V
+    - GND -> GND
+    - SCK  -> Digital 2
+    - MISO -> Digital 3
+    - MOSI -> Digital 4
+    - SS   -> Digital 5
+  
+NEOPIXEL RING:
+ - Data out -> Digital 6
+
+STATIONS
+Can store information for up to 16 stations. (NOTE: May change this to 10 so we only need 1 page per station)
+For each station: Visited yes/no, and Energy 0-255
+  0 - Control console - CONSOLE
+  1 - Thought Distiller - DISTILLER
+  2 - Casino - CASINO
+  3 - Forest - FOREST
+  4 - Alchemization Station - ALCHEMY
+  5 - Pipes - PIPES
+  6 - Init/reset station
+
+TODO:
+- Communicate with external microcontroller
+- Slerp comms
+- Casino station
+- Jungle station
+- Alchemization station
+- Thought distiller station
+- Control console station
+- Retoxify station
