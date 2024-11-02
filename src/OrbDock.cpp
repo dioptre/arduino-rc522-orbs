@@ -429,21 +429,38 @@ void OrbDock::setLEDPattern(LEDPatternId patternId) {
 void OrbDock::runLEDPatterns() {
     static unsigned long ledPreviousMillis;
     static uint8_t ledBrightness;
-    static unsigned long ledBrightnessPreviousMillis;
+    //static unsigned long ledBrightnessPreviousMillis;
+    static LEDPatternId currentLedPatternId;
+    static unsigned int ledPatternInterval;
 
-    if (currentMillis - ledPreviousMillis >= ledPatternConfig.interval) {
+    // If the LED pattern has changed, reset the previous millis
+    // All of this is just to enable the orb_connected pattern speed to be dynamic based on energy level
+    if (currentLedPatternId != ledPatternConfig.id) {
+        currentLedPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
+        ledPreviousMillis = currentMillis;
+        ledPatternInterval = ledPatternConfig.interval;
+    }
+
+    if (currentMillis - ledPreviousMillis >= ledPatternInterval) {
         ledPreviousMillis = currentMillis;
 
         switch (ledPatternConfig.id) {
-            case LED_PATTERN_NO_ORB:
+            case LED_PATTERN_NO_ORB: {
                 led_rainbow();
                 break;
-            case LED_PATTERN_ORB_CONNECTED:
+            }
+            case LED_PATTERN_ORB_CONNECTED: {
+                // Adjust pattern speed based on total energy
+                uint16_t totalEnergy = getTotalEnergy();
+                totalEnergy = min(totalEnergy, 200);
+                ledPatternInterval = map(200 - totalEnergy, 0, 200, 20, 100);
                 led_trait_chase();
                 break;
-            case LED_PATTERN_FLASH:
+            }
+            case LED_PATTERN_FLASH: {
                 led_flash();
                 break;
+            }
             default:
                 break;
         }
