@@ -10,10 +10,16 @@
 #define NEOPIXEL_PIN (6)
 
 // PN532 pins
-#define PN532_SCK  (2)
-#define PN532_MISO (3)
-#define PN532_MOSI (4)
-#define PN532_SS   (5)
+#define PN532_SCK  (5)
+#define PN532_MISO (4)
+#define PN532_MOSI (3)
+#define PN532_SS   (2)
+
+// Old PN532 pins - for later dock designs
+// #define PN532_SCK  (2)
+// #define PN532_MISO (5)
+// #define PN532_MOSI (3)
+// #define PN532_SS   (4)
 
 // Old PN532 pins - for early dock designs
 // #define PN532_SCK  (2)

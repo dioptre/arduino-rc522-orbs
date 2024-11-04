@@ -2,10 +2,12 @@
 #include "OrbDockConfigurizer.cpp"
 #include "OrbDockBasic.cpp"
 #include "OrbDockCasino.cpp"
+#include "OrbDockLedStrip.cpp"
 
-//OrbDockConfigurizer orbDock{};
 OrbDockBasic orbDock{};
+//OrbDockConfigurizer orbDock{};
 //OrbDockCasino orbDock{};
+//OrbDockLedStrip orbDock{};
 
 void setup() {
     Serial.begin(115200);

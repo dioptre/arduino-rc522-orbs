@@ -11,19 +11,18 @@ TROUBLESHOOTING:
 See OrbDockBasic for a simple example of how to implement an orb dock for your station.
 To set your orb station, add it to main.cpp.
 
-PIN CONNECTIONS 
+PIN CONNECTIONS:
 
-PN532 RFID READER: 
-  - ARDUINO NANO/UNO:
-    - 5V -> 5V
+  PN532 RFID READER (note Mega boards use different pins. Also we had different pinouts for early prototypes that may still be in circulation):
+    - 5V -> VCC (there are two, stick it with the other data pins below)
     - GND -> GND
     - SCK  -> Digital 2
     - MISO -> Digital 3
     - MOSI -> Digital 4
     - SS   -> Digital 5
-  
-NEOPIXEL RING:
- - Data out -> Digital 6
+    
+  NEOPIXEL RING:
+  - Data out -> Digital 6
 
 STATIONS
 Can store information for up to 16 stations. (NOTE: May change this to 10 so we only need 1 page per station)

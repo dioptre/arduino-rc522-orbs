@@ -1,15 +1,15 @@
 /**
  * Orb Casino Dock
  * 
+ * For the button screen:
  * I2C pins:
- * SDA: A4 (Pin 27)
- * SCL: A5 (Pin 28)
- * 
+ *  SDA: A4 (Pin 27)
+ *  SCL: A5 (Pin 28)
  * Button Pins:
- * S1: D8     // Add 1 energy
- * S2: D9     // Add 5 energy  
- * S3: D10    // Remove 1 energy
- * S4: D11    // Remove 5 energy
+ *  S1: D8     // Add 1 energy
+ *  S2: D9     // Add 5 energy  
+ *  S3: D10    // Remove 1 energy
+ *  S4: D11    // Remove 5 energy
  */
 
 #include "OrbDock.h"
