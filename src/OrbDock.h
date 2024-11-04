@@ -149,7 +149,7 @@ public:
     OrbDock(StationId id);
     virtual ~OrbDock();
     
-    void begin();
+    virtual void begin();
     virtual void loop();
 
 protected:
@@ -168,6 +168,7 @@ protected:
     virtual void onOrbDisconnected() = 0;
     virtual void onError(const char* errorMessage) = 0;
     virtual void onUnformattedNFC() = 0;
+    virtual void onEnergyLevelChanged(uint16_t newEnergy) {};
 
     // Helper methods that child classes can use
     Station getCurrentStationInfo();

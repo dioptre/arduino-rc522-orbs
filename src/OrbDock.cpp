@@ -633,4 +633,9 @@ float OrbDock::lerp(float start, float end, float t) {
     return start + t * (end - start);
 }
 
+// Provide empty implementations for pure virtual functions to satisfy the linker
+void OrbDock::onOrbConnected() {}
+void OrbDock::onOrbDisconnected() {}
+void OrbDock::onError(const char* errorMessage) {}
+void OrbDock::onUnformattedNFC() {}
 /********************** MISC FUNCTIONS *****************************/
