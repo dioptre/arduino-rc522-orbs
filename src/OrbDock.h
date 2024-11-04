@@ -9,23 +9,23 @@
 // NeoPixel pin 
 #define NEOPIXEL_PIN (6)
 
-// PN532 pins
-#define PN532_SCK  (5)
-#define PN532_MISO (4)
-#define PN532_MOSI (3)
-#define PN532_SS   (2)
+// PN532 pins - latest design
+#define PN532_SCK   (5)
+#define PN532_MISO  (4)
+#define PN532_MOSI  (3)
+#define PN532_SS    (2)
 
-// Old PN532 pins - for later dock designs
-// #define PN532_SCK  (2)
-// #define PN532_MISO (5)
-// #define PN532_MOSI (3)
-// #define PN532_SS   (4)
+// V2 PN532 pins - for later dock designs
+#define PN532_SCK2  (2)
+#define PN532_MISO2 (3)
+#define PN532_MOSI2 (4)
+#define PN532_SS2   (5)
 
-// Old PN532 pins - for early dock designs
-// #define PN532_SCK  (2)
-// #define PN532_MISO (5)
-// #define PN532_MOSI (3)
-// #define PN532_SS   (4)
+// V1 PN532 pins - for early dock designs
+#define PN532_SCK1  (2)
+#define PN532_MISO1 (5)
+#define PN532_MOSI1 (3)
+#define PN532_SS1   (4)
 
 // Status constants
 #define STATUS_FAILED    0

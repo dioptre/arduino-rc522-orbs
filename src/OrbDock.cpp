@@ -25,21 +25,41 @@ void OrbDock::begin() {
     strip.setBrightness(0);
     strip.show();
 
-    // Initialize NFC
+    // Try to initialize NFC with default pins
+    Serial.println(F("Initializing PN532 NFC reader with latest dock pins..."));
     nfc.begin();
     uint32_t versiondata = nfc.getFirmwareVersion();
+    
+    // If default pins don't work, try later dock design pins
     if (!versiondata) {
-        Serial.println("Didn't find PN53x board");
-        // Flash red LED to indicate error
-        while (1) {
-            strip.setPixelColor(0, 255, 0, 0); // Red
-            strip.show();
-            delay(1000);
-            strip.setPixelColor(0, 0, 0, 0); // Off
-            strip.show(); 
-            delay(1000);
+        Serial.println(F("Latest dock pins failed, trying V2 dock pins..."));
+        nfc = Adafruit_PN532(PN532_SCK2, PN532_MISO2, PN532_MOSI2, PN532_SS2); // Later dock design pins
+        nfc.begin();
+        versiondata = nfc.getFirmwareVersion();
+        
+        // If that fails too, try newest pins
+        if (!versiondata) {
+            Serial.println(F("V2 dock pins failed, trying v1 dock pins..."));
+            nfc = Adafruit_PN532(PN532_SCK1, PN532_MISO1, PN532_MOSI1, PN532_SS1);
+            nfc.begin();
+            versiondata = nfc.getFirmwareVersion();
+            
+            // If all pin configurations fail
+            if (!versiondata) {
+                Serial.println(F("Didn't find PN53x board with any pin configuration"));
+                // Flash red LED to indicate error
+                while (1) {
+                    strip.setPixelColor(0, 255, 0, 0); // Red
+                    strip.show();
+                    delay(1000);
+                    strip.setPixelColor(0, 0, 0, 0); // Off
+                    strip.show(); 
+                    delay(1000);
+                }
+            }
         }
     }
+
     nfc.SAMConfig();                        // Configure the PN532 to read RFID tags
     nfc.setPassiveActivationRetries(0x11);  // Set the max number of retry attempts to read from a card
 
