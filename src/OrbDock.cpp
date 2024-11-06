@@ -1,13 +1,5 @@
 #include "OrbDock.h"
 
-/* 
-TO DO:
-For orb energy, I'm gonna simplify to just have one total energy rather than per station.
-I'll use one byte and max out at 250. Orbs will start at 10 energy, 
-and stations can assign somewhere from 5-15 energy for dropping their orb in, 
-depending on the level of engagement of a station. We'll require 40 to enter the Alchemization Station.
-At 40, the docks will be animating LEDs at the fastest speed.
-*/
 
 // Constructor
 OrbDock::OrbDock(StationId id) :
@@ -167,15 +159,13 @@ void OrbDock::printOrbInfo() {
     Serial.println(F("\n*************************************************"));
     Serial.print(F("Trait: "));
     Serial.print(getTraitName());
-    Serial.print(F(" Total energy: "));
-    Serial.println(getTotalEnergy());
+    Serial.print(F(" Energy: "));
+    Serial.println(orbInfo.energy);
     
     for (int i = 0; i < NUM_STATIONS; i++) {
         Serial.print(STATION_NAMES[i]);
         Serial.print(F(": Visited:"));
         Serial.print(orbInfo.stations[i].visited ? "Yes" : "No");
-        Serial.print(F(", Energy:"));
-        Serial.print(orbInfo.stations[i].energy);
         Serial.print(F(" | "));
     }
     
@@ -197,9 +187,9 @@ void OrbDock::endOrbSession() {
 int OrbDock::writeStation(int stationId) {
     // Prepare the page buffer with station data
     page_buffer[0] = orbInfo.stations[stationId].visited ? 1 : 0;
-    page_buffer[1] = (orbInfo.stations[stationId].energy >> 8) & 0xFF; // High byte
-    page_buffer[2] = orbInfo.stations[stationId].energy & 0xFF; // Low byte
-    page_buffer[3] = orbInfo.stations[stationId].custom;
+    page_buffer[1] = orbInfo.stations[stationId].custom;
+    page_buffer[2] = 0;
+    page_buffer[3] = 0;
 
     // Write the buffer to the NFC
     int writeDataStatus = writePage(STATIONS_PAGE_OFFSET + stationId, page_buffer);
@@ -295,36 +285,34 @@ int OrbDock::setVisited(bool visited) {
     return writeStation(stationId);
 }
 
-int OrbDock::setEnergy(uint16_t energy) {
+int OrbDock::setEnergy(byte energy) {
     Serial.print(F("Setting energy to "));
     Serial.println(energy);
-    Serial.print(F(" for station "));
-    Serial.println(STATION_NAMES[stationId]);
-    orbInfo.stations[stationId].energy = energy;
-    int result = writeStation(stationId);
+    orbInfo.energy = energy;
+    byte energyBytes[4] = {energy, 0, 0, 0};  // Convert energy to bytes
+    memcpy(page_buffer, energyBytes, 4);
+    int result = writePage(ENERGY_PAGE, page_buffer);
     if (result == STATUS_SUCCEEDED) {
         setLEDPattern(LED_PATTERN_FLASH);
     }
     return result;
 }
 
-int OrbDock::addEnergy(uint16_t amount) {
-    uint32_t newEnergy = orbInfo.stations[stationId].energy + amount;
-    if (newEnergy > 65535) newEnergy = 65535;
+int OrbDock::addEnergy(byte amount) {
+    byte newEnergy = orbInfo.energy + amount;
+    if (newEnergy > 250) newEnergy = 250;
     Serial.print(F("Adding "));
     Serial.print(amount);
-    Serial.print(F(" to energy for station "));
-    Serial.println(STATION_NAMES[stationId]);
+    Serial.println(F(" energy"));
     return setEnergy(newEnergy);
 }
 
-int OrbDock::removeEnergy(uint16_t amount) {
-    int32_t newEnergy = orbInfo.stations[stationId].energy - amount;
+int OrbDock::removeEnergy(byte amount) {
+    byte newEnergy = orbInfo.energy - amount;
     if (newEnergy < 0) newEnergy = 0;
     Serial.print(F("Removing "));
     Serial.print(amount);
-    Serial.print(F(" from energy for station "));
-    Serial.println(STATION_NAMES[stationId]);
+    Serial.println(F(" energy"));
     return setEnergy(newEnergy);
 }
 
@@ -336,21 +324,6 @@ int OrbDock::setCustom(byte value) {
     orbInfo.stations[stationId].custom = value;
     int result = writeStation(stationId);
     return result;
-}
-
-uint16_t OrbDock::getEnergy() {
-    return orbInfo.stations[stationId].energy;
-}
-
-uint16_t OrbDock::getTotalEnergy() {
-    uint16_t totalEnergy = 0;
-    for (int i = 0; i < NUM_STATIONS; i++) {
-        totalEnergy += orbInfo.stations[i].energy;
-    }
-    // Cap total energy at 250
-    totalEnergy = min(totalEnergy, 200);
-
-    return totalEnergy;
 }
 
 Station OrbDock::getCurrentStationInfo() {
@@ -402,7 +375,7 @@ int OrbDock::resetOrb() {
 void OrbDock::reInitializeStations() {
     Serial.println(F("Initializing stations information to default values..."));
     for (int i = 0; i < NUM_STATIONS; i++) {
-        orbInfo.stations[i] = {false, 0, 0};
+        orbInfo.stations[i] = {false, 0};
     }
 }
 
@@ -417,8 +390,8 @@ int OrbDock::readOrbInfo() {
             return STATUS_FAILED;
         }
         orbInfo.stations[i].visited = page_buffer[0] == 1;
-        orbInfo.stations[i].energy = (page_buffer[1] << 8) | page_buffer[2]; // Combine high and low bytes
-        orbInfo.stations[i].custom = page_buffer[3];
+        orbInfo.stations[i].custom = page_buffer[1];
+        
     }
 
     // Read trait
@@ -465,7 +438,7 @@ void OrbDock::runLEDPatterns() {
 
     // If the LED pattern is orb_connected, set the LED speed based on energy level
     if (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED) {
-        ledPatternInterval = map(MAX_ENERGY - getTotalEnergy(), 0, MAX_ENERGY, 20, 100);
+        ledPatternInterval = map(MAX_ENERGY - orbInfo.energy, 0, MAX_ENERGY, 20, 100);
     }
     else {
         ledPatternInterval = ledPatternConfig.interval;
@@ -480,10 +453,6 @@ void OrbDock::runLEDPatterns() {
                 break;
             }
             case LED_PATTERN_ORB_CONNECTED: {
-                // Adjust pattern speed based on total energy
-                uint16_t totalEnergy = getTotalEnergy();
-                totalEnergy = min(totalEnergy, 200);
-                ledPatternInterval = map(200 - totalEnergy, 0, 200, 20, 100);
                 led_trait_chase();
                 break;
             }

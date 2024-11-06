@@ -31,7 +31,7 @@ void OrbDockComms::loop() {
 void OrbDockComms::onOrbConnected() {
     OrbDock::onOrbConnected();
     sendMessage("ORB_INSERTED");
-    sendMessage("ENERGY_LEVEL:" + String(getEnergy()));
+    sendMessage("ENERGY_LEVEL:" + String(orbInfo.energy));
 }
 
 // Event: Orb Disconnected
@@ -41,7 +41,7 @@ void OrbDockComms::onOrbDisconnected() {
 }
 
 // Event: Energy Level Changed
-void OrbDockComms::onEnergyLevelChanged(uint16_t newEnergy) {
+void OrbDockComms::onEnergyLevelChanged(byte newEnergy) {
     sendMessage("ENERGY_LEVEL:" + String(newEnergy));
 }
 

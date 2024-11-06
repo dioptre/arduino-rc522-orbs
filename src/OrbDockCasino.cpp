@@ -10,6 +10,23 @@
  *  S2: D9     // Add 5 energy  
  *  S3: D10    // Remove 1 energy
  *  S4: D11    // Remove 5 energy
+ * 
+ *  * orbInfo contains information on connected orb:
+ * - trait (byte, one of TraitId enum)
+ * - energy (byte, 0-250)
+ * - stations[] (array of StationInfo structs, one for each station)
+ * 
+ * Available methods from base class:
+ * - onOrbConnected() (override)
+ * - onOrbDisconnected() (override)
+ * - onError(const char* errorMessage) (override)
+ * - onUnformattedNFC() (override)
+ * 
+ * - addEnergy(byte amount)
+ * - setEnergy(byte amount)
+ * - getTraitName()
+ * - getTraitColor()
+ * - printOrbInfo()
  */
 
 #include "OrbDock.h"
@@ -25,7 +42,7 @@ private:
         
         if (isOrbConnected) {
             char energyStr[8];
-            itoa(getEnergy(), energyStr, 10);
+            itoa(orbInfo.energy, energyStr, 10);
             display.println(energyStr);
         } else {
             display.println("::");
@@ -52,39 +69,21 @@ public:
         // Handle button inputs
         if (display.isButton1Pressed()) {
             addEnergy(1);
-            Serial.println(F("Added 1 energy"));
-            //delay(100); // Simple debounce
             updateDisplay();
         }
         
         if (display.isButton2Pressed()) {
             addEnergy(5);
-            Serial.println(F("Added 5 energy"));
-            //delay(100); // Simple debounce
             updateDisplay();
         }
 
         if (display.isButton3Pressed()) {
-            Station station = getCurrentStationInfo();
-            if (station.energy > 5) {
-                removeEnergy(5);
-                Serial.println(F("Removed 5 energy"));
-            }
-            else {
-                removeEnergy(station.energy);
-                Serial.println(F("Removed all energy"));
-            }
-            //delay(100);
+            removeEnergy(5);
             updateDisplay();
         }
 
         if (display.isButton4Pressed()) {
-            Station station = getCurrentStationInfo();
-            if (station.energy >= 1) {
-                removeEnergy(1);
-                Serial.println(F("Removed 1 energy"));
-            }
-            //delay(100);
+            removeEnergy(1);
             updateDisplay();
         }
     }

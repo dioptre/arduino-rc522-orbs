@@ -13,7 +13,7 @@ public:
 protected:
     void onOrbConnected() override;
     void onOrbDisconnected() override;
-    void onEnergyLevelChanged(uint16_t newEnergy) override;
+    void onEnergyLevelChanged(byte newEnergy) override;
     void onError(const char* errorMessage) override;
     void onUnformattedNFC() override;
 

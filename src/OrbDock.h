@@ -44,13 +44,14 @@
 #define PAGE_OFFSET 4
 #define ORBS_PAGE (PAGE_OFFSET + 0)
 #define TRAIT_PAGE (PAGE_OFFSET + 1) 
-#define STATIONS_PAGE_OFFSET (PAGE_OFFSET + 2)
+#define ENERGY_PAGE (PAGE_OFFSET + 2)
+#define STATIONS_PAGE_OFFSET (PAGE_OFFSET + 3)
 #define ORBS_HEADER "ORBS"
 
 // LED constants
 #define NEOPIXEL_COUNT  24
 
-// Station constants
+// Orb constants
 #define NUM_STATIONS 14
 #define NUM_TRAITS 6
 #define MAX_ENERGY 250
@@ -101,7 +102,6 @@ const char* const STATION_NAMES[] = {
 // Station struct
 struct Station {
     bool visited;
-    uint16_t energy;
     byte custom;
 };
 
@@ -142,6 +142,7 @@ const LEDPatternConfig LED_PATTERNS[] = {
 // Additional helper structs/enums
 struct OrbInfo {
     TraitId trait;
+    byte energy;
     Station stations[NUM_STATIONS];
 };
 
@@ -169,12 +170,10 @@ protected:
     virtual void onOrbDisconnected() = 0;
     virtual void onError(const char* errorMessage) = 0;
     virtual void onUnformattedNFC() = 0;
-    virtual void onEnergyLevelChanged(uint16_t newEnergy) {};
+    virtual void onEnergyLevelChanged(byte newEnergy) {};
 
     // Helper methods that child classes can use
     Station getCurrentStationInfo();
-    // Returns the total energy of the orb across all stations
-    uint16_t getTotalEnergy();
     // Returns the trait name
     const char* getTraitName();
     // Resets the station information, but keeps the trait
@@ -183,14 +182,12 @@ protected:
     int formatNFC(TraitId newTrait);
     // Writes the trait to the orb
     int setTrait(TraitId newTrait);
-    // Adds energy to the current station
-    int addEnergy(uint16_t amount);
-    // Removes energy from the current station
-    int removeEnergy(uint16_t amount);
-    // Sets the energy of the current station
-    int setEnergy(uint16_t amount);
-    // Gets the energy of the current station
-    uint16_t getEnergy();
+    // Adds energy to the orb
+    int addEnergy(byte amount);
+    // Removes energy from the orb
+    int removeEnergy(byte amount);
+    // Sets the energy of the orb
+    int setEnergy(byte amount);
     // Sets the visited status of the current station
     int setVisited(bool visited);
     // Sets the custom value of the current station

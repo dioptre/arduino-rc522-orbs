@@ -1,6 +1,11 @@
 /**
  * Basic OrbDock implementation that just prints to Serial,
- * and adds 1 energy to the orb for the current station when the orb is connected
+ * and adds 1 energy to the orb when it's connected
+ * 
+ * orbInfo contains information on connected orb:
+ * - trait (byte, one of TraitId enum)
+ * - energy (byte, 0-250)
+ * - stations[] (array of StationInfo structs, one for each station)
  * 
  * Available methods from base class:
  * - onOrbConnected() (override)
@@ -8,10 +13,8 @@
  * - onError(const char* errorMessage) (override)
  * - onUnformattedNFC() (override)
  * 
- * - addEnergy(uint16_t amount)
- * - setEnergy(uint16_t amount)
- * - getEnergy()
- * - getTotalEnergy()
+ * - addEnergy(byte amount)
+ * - setEnergy(byte amount)
  * - getTraitName()
  * - getTraitColor()
  * - printOrbInfo()

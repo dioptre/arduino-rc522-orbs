@@ -2,16 +2,20 @@
  * OrbDockLedStrip implementation that controls an LED strip based on orb state
  * and displays different patterns when orbs are connected/disconnected
  * 
+ * orbInfo contains information on connected orb:
+ * - trait (byte, one of TraitId enum)
+ * - energy (byte, 0-250)
+ * - stations[] (array of StationInfo structs, one for each station)
+ * 
  * Available methods from base class:
  * - onOrbConnected() (override)
  * - onOrbDisconnected() (override) 
+ * - onEnergyLevelChanged(byte newEnergy) (override)
  * - onError(const char* errorMessage) (override)
  * - onUnformattedNFC() (override)
  * 
- * - addEnergy(uint16_t amount)
- * - setEnergy(uint16_t amount)
- * - getEnergy()
- * - getTotalEnergy()
+ * - addEnergy(byte amount)
+ * - setEnergy(byte amount)
  * - getTraitName()
  * - getTraitColor()
  * - printOrbInfo()

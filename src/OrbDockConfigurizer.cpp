@@ -1,15 +1,33 @@
 /**
  * Orb Reset and Formatting Dock
  * 
+* For the button screen:
  * I2C pins:
- * SDA: A4 (Pin 27)
- * SCL: A5 (Pin 28)
- * 
+ *  SDA: A4 (Pin 27)
+ *  SCL: A5 (Pin 28)
  * Button Pins:
- * S1: D8     // Next trait button
- * S2: D9     // Previous trait button  
- * S3: D10    // Reset orb button
- * S4: D11    // Format orb button
+ *  S1: D8     // Add 1 energy
+ *  S2: D9     // Add 5 energy  
+ *  S3: D10    // Remove 1 energy
+ *  S4: D11    // Remove 5 energy
+ * 
+ *  * orbInfo contains information on connected orb:
+ * - trait (byte, one of TraitId enum)
+ * - energy (byte, 0-250)
+ * - stations[] (array of StationInfo structs, one for each station)
+ * 
+ * Available methods from base class:
+ * - onOrbConnected() (override)
+ * - onOrbDisconnected() (override)
+ * - onEnergyLevelChanged(byte newEnergy) (override)
+ * - onError(const char* errorMessage) (override)
+ * - onUnformattedNFC() (override)
+ * 
+ * - addEnergy(byte amount)
+ * - setEnergy(byte amount)
+ * - getTraitName()
+ * - getTraitColor()
+ * - printOrbInfo()
  */
 
 #include "OrbDock.h"
