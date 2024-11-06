@@ -53,6 +53,7 @@
 // Station constants
 #define NUM_STATIONS 14
 #define NUM_TRAITS 6
+#define MAX_ENERGY 250
 
 enum TraitId {
     NONE, RUMINATE, SHAME, DOUBT, DISCONTENT, HOPELESS
@@ -219,6 +220,7 @@ private:
     void led_rainbow();
     void led_trait_chase();
     void led_flash();
+    void led_error();
     uint32_t dimColor(uint32_t color, uint8_t intensity);
     float lerp(float start, float end, float t);
 

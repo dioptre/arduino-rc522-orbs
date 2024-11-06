@@ -1,5 +1,13 @@
 #include "OrbDock.h"
 
+/* 
+TO DO:
+For orb energy, I'm gonna simplify to just have one total energy rather than per station.
+I'll use one byte and max out at 250. Orbs will start at 10 energy, 
+and stations can assign somewhere from 5-15 energy for dropping their orb in, 
+depending on the level of engagement of a station. We'll require 40 to enter the Alchemization Station.
+At 40, the docks will be animating LEDs at the fastest speed.
+*/
 
 // Constructor
 OrbDock::OrbDock(StationId id) :
@@ -339,6 +347,9 @@ uint16_t OrbDock::getTotalEnergy() {
     for (int i = 0; i < NUM_STATIONS; i++) {
         totalEnergy += orbInfo.stations[i].energy;
     }
+    // Cap total energy at 250
+    totalEnergy = min(totalEnergy, 200);
+
     return totalEnergy;
 }
 
@@ -450,14 +461,13 @@ void OrbDock::runLEDPatterns() {
     static unsigned long ledPreviousMillis;
     static uint8_t ledBrightness;
     //static unsigned long ledBrightnessPreviousMillis;
-    static LEDPatternId currentLedPatternId;
     static unsigned int ledPatternInterval;
 
-    // If the LED pattern has changed, reset the previous millis
-    // All of this is just to enable the orb_connected pattern speed to be dynamic based on energy level
-    if (currentLedPatternId != ledPatternConfig.id) {
-        currentLedPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
-        ledPreviousMillis = currentMillis;
+    // If the LED pattern is orb_connected, set the LED speed based on energy level
+    if (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED) {
+        ledPatternInterval = map(MAX_ENERGY - getTotalEnergy(), 0, MAX_ENERGY, 20, 100);
+    }
+    else {
         ledPatternInterval = ledPatternConfig.interval;
     }
 
@@ -613,6 +623,30 @@ void OrbDock::led_flash() {
         );
 
         strip.setPixelColor(i, dimColor(shiftedColor, intensity));
+    }
+}
+
+void OrbDock::led_error() {
+    static uint8_t r = 0;
+    static uint8_t b = 255;
+    static bool toRed = true;
+
+    if (toRed) {
+        r = min(255, r + 1);
+        b = max(0, b - 1);
+        if (r >= 255 && b <= 0) {
+            toRed = false;
+        }
+    } else {
+        r = max(0, r - 1); 
+        b = min(255, b + 1);
+        if (r <= 0 && b >= 255) {
+            toRed = true;
+        }
+    }
+
+    for(int i = 0; i < NEOPIXEL_COUNT; i++) {
+        strip.setPixelColor(i, r, 0, b);
     }
 }
 
