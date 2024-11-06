@@ -27,7 +27,9 @@ public:
 protected:
     void onOrbConnected() override {
         Serial.println(F("Orb connected"));
-        addEnergy(1);
+        if (!getCurrentStationInfo().visited) {
+            addEnergy(1);
+        }
     }
 
     void onOrbDisconnected() override {
