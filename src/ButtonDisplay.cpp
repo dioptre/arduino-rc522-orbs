@@ -21,10 +21,10 @@
 #define DISPLAY_HEIGHT 64  // Display height in pixels
 #define SCREEN_ADDRESS 0x3C
 
-#define BTN1_PIN 8
-#define BTN2_PIN 9
-#define BTN3_PIN 10
-#define BTN4_PIN 11
+#define BTN1_PIN 7
+#define BTN2_PIN 8
+#define BTN3_PIN 9
+#define BTN4_PIN 10
 
 ButtonDisplay::ButtonDisplay(const uint8_t* font) : display(U8G_I2C_OPT_NONE), defaultFont(font) {
     buttonsInitialized = false;
