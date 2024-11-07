@@ -37,10 +37,10 @@ void OrbDockComms::loop() {
 void OrbDockComms::onOrbConnected() {
     OrbDock::onOrbConnected();
     digitalWrite(_orbPresentPin, HIGH);
-    analogWrite(_energyLevelPin, 90);
-    analogWrite(_toxicTraitPin, 4);
-    // analogWrite(_energyLevelPin, getEnergy());
-    // analogWrite(_toxicTraitPin, static_cast<int>(orbInfo.trait));
+    analogWrite(_energyLevelPin, getEnergy());
+    analogWrite(_toxicTraitPin, static_cast<int>(orbInfo.trait));
+    // analogWrite(_energyLevelPin, 90);
+    // analogWrite(_toxicTraitPin, 4);
     // Serial.print(F("Orb Comms sending: Orb Present = HIGH, Energy = "));
     // Serial.print(getEnergy());
     // Serial.print(F(", Trait = "));
