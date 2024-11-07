@@ -351,6 +351,10 @@ int OrbDock::formatNFC(TraitId trait) {
     if (setTrait(trait) == STATUS_FAILED) {
         return STATUS_FAILED;
     }
+    // Write energy
+    if (setEnergy(INIT_ENERGY) == STATUS_FAILED) {
+        return STATUS_FAILED;
+    }
     return STATUS_SUCCEEDED;
 }
 
@@ -410,6 +414,7 @@ int OrbDock::writeOrbInfo() {
     Serial.println("Writing stations to orb...");
     writeStations();
     setTrait(orbInfo.trait);
+    setEnergy(orbInfo.energy);
 
     return STATUS_SUCCEEDED;
 }
