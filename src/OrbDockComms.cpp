@@ -1,65 +1,70 @@
 #include "OrbDockComms.h"
+#include <Arduino.h>
 
-// Constructor
-OrbDockComms::OrbDockComms(uint8_t rxPin, uint8_t txPin)
-    : OrbDock(StationId::GENERIC), // Initialize with a default StationId if needed
-      commsSerial(rxPin, txPin) // Initialize SoftwareSerial with RX and TX pins
+OrbDockComms::OrbDockComms(uint8_t orbPresentPin, uint8_t energyLevelPin, uint8_t toxicTraitPin)
+    : OrbDock(StationId::GENERIC),
+    _orbPresentPin(orbPresentPin),
+    _energyLevelPin(energyLevelPin),
+    _toxicTraitPin(toxicTraitPin)
 {
+
+    // Single F() string with one print
+    // Serial.print(F("OrbDockComms initialized - Present Pin: "));
+    // Serial.print(orbPresentPin);
+    // Serial.print(F(" Level Pin: "));
+    // Serial.print(_energyLevelPin);
+    // Serial.print(F(" Trait Pin: "));
+    // Serial.println(_toxicTraitPin);
 }
 
-// Initialize communication
 void OrbDockComms::begin() {
     OrbDock::begin();
-    commsSerial.begin(9600); // Initialize SoftwareSerial at 9600 baud
-    Serial.println(F("OrbDockComms initialized for serial communication."));
+    pinMode(_orbPresentPin, OUTPUT);
+    pinMode(_energyLevelPin, OUTPUT);
+    pinMode(_toxicTraitPin, OUTPUT);
+    
+    digitalWrite(_orbPresentPin, LOW);
+    analogWrite(_energyLevelPin, 0);
+    analogWrite(_toxicTraitPin, 0);
+    
+    // Serial.println(F("OrbDockComms initialized"));
 }
 
-// Main loop with communication handling
 void OrbDockComms::loop() {
     OrbDock::loop();
-
-    // Handle incoming messages if needed
-    while (commsSerial.available()) {
-        String received = commsSerial.readStringUntil('\n');
-        Serial.print(F("Received via Comms Serial: "));
-        Serial.println(received);
-        // Handle received messages if implementing commands
-    }
 }
 
-// Event: Orb Connected
 void OrbDockComms::onOrbConnected() {
     OrbDock::onOrbConnected();
-    sendMessage("ORB_INSERTED");
-    sendMessage("ENERGY_LEVEL:" + String(orbInfo.energy));
+    digitalWrite(_orbPresentPin, HIGH);
+    analogWrite(_energyLevelPin, 90);
+    analogWrite(_toxicTraitPin, 4);
+    // analogWrite(_energyLevelPin, getEnergy());
+    // analogWrite(_toxicTraitPin, static_cast<int>(orbInfo.trait));
+    // Serial.print(F("Orb Comms sending: Orb Present = HIGH, Energy = "));
+    // Serial.print(getEnergy());
+    // Serial.print(F(", Trait = "));
+    // Serial.println(static_cast<int>(orbInfo.trait));
 }
 
-// Event: Orb Disconnected
 void OrbDockComms::onOrbDisconnected() {
     OrbDock::onOrbDisconnected();
-    sendMessage("ORB_REMOVED");
+    digitalWrite(_orbPresentPin, LOW);
+    analogWrite(_energyLevelPin, 0);
+    analogWrite(_toxicTraitPin, 0);
+    // Serial.println(F("Orb Comms sending: Orb Present = LOW, Energy = 0, Trait = 0"));
 }
 
-// Event: Energy Level Changed
 void OrbDockComms::onEnergyLevelChanged(byte newEnergy) {
-    sendMessage("ENERGY_LEVEL:" + String(newEnergy));
+    analogWrite(_energyLevelPin, newEnergy);
+    // Serial.print(F("Orb Comms sending: Energy = "));
+    // Serial.println(newEnergy);
 }
 
-// Event: Error Occurred
 void OrbDockComms::onError(const char* errorMessage) {
     OrbDock::onError(errorMessage);
-    sendMessage("ERROR:" + String(errorMessage));
 }
 
-// Event: Unformatted NFC Detected
 void OrbDockComms::onUnformattedNFC() {
     OrbDock::onUnformattedNFC();
-    sendMessage("UNFORMATTED_NFC");
-}
-
-// Helper method to send messages over SoftwareSerial
-void OrbDockComms::sendMessage(const String& message) {
-    commsSerial.println(message);
-    Serial.print(F("Sent via Comms Serial: "));
-    Serial.println(message);
 }

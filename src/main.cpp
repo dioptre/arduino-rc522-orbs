@@ -5,11 +5,11 @@
 #include "OrbDockLedStrip.cpp"
 #include "OrbDockComms.h"
 
-OrbDockBasic orbDock{};
+// OrbDockBasic orbDock{};
 //OrbDockConfigurizer orbDock{};
 //OrbDockCasino orbDock{};
 //OrbDockLedStrip orbDock{};
-// OrbDockComms orbDock(8, 9); // RX on pin 8, TX on pin 9
+OrbDockComms orbDock(10, 11, 12);
 
 void setup() {
     Serial.begin(115200);

@@ -2,11 +2,10 @@
 #define ORBDOCKCOMMS_H
 
 #include "OrbDock.h"
-#include <SoftwareSerial.h>
 
 class OrbDockComms : public OrbDock {
 public:
-    OrbDockComms(uint8_t rxPin, uint8_t txPin);
+    OrbDockComms(uint8_t orbPresentPin = 10, uint8_t energyLevelPin = 11, uint8_t toxicTraitPin = 12);
     void begin() override;
     void loop() override;
 
@@ -18,8 +17,9 @@ protected:
     void onUnformattedNFC() override;
 
 private:
-    SoftwareSerial commsSerial;
-    void sendMessage(const String& message);
+    uint8_t _orbPresentPin;
+    uint8_t _energyLevelPin;
+    uint8_t _toxicTraitPin;
 };
 
 #endif // ORBDOCKCOMMS_H
