@@ -4,12 +4,14 @@
 #include "OrbDockCasino.cpp"
 #include "OrbDockLedStrip.cpp"
 #include "OrbDockComms.h"
+#include "OrbDockTrigger.cpp"
 
-// OrbDockBasic orbDock{};
+//OrbDockBasic orbDock{};
 //OrbDockConfigurizer orbDock{};
 //OrbDockCasino orbDock{};
 //OrbDockLedStrip orbDock{};
-OrbDockComms orbDock(10, 11, 12);
+//OrbDockComms orbDock(10, 11, 12);
+OrbDockTrigger orbDock(12);
 
 void setup() {
     Serial.begin(115200);
