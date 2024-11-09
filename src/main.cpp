@@ -11,7 +11,7 @@
 //OrbDockCasino orbDock{};
 //OrbDockLedStrip orbDock{};
 //OrbDockComms orbDock(10, 11, 12);
-OrbDockTrigger orbDock(12);
+OrbDockTrigger orbDock(12, 11, 10);
 
 void setup() {
     Serial.begin(115200);

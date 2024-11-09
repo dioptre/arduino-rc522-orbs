@@ -4,12 +4,16 @@
 class OrbDockTrigger : public OrbDock {
 private:
     uint8_t _triggerPin;
+    uint8_t _v5Pin;
+    uint8_t _gndPin;
     unsigned long _triggerStartTime;
 
 public:
-    OrbDockTrigger(uint8_t triggerPin) 
+    OrbDockTrigger(uint8_t triggerPin, uint8_t v5Pin, uint8_t gndPin) 
         : OrbDock(StationId::PIPES),
         _triggerPin(triggerPin),
+        _v5Pin(v5Pin),
+        _gndPin(gndPin),
         _triggerStartTime(0)
     {
     }
@@ -18,6 +22,11 @@ public:
         OrbDock::begin();
         pinMode(_triggerPin, OUTPUT);
         digitalWrite(_triggerPin, LOW);
+        pinMode(_v5Pin, OUTPUT);
+        digitalWrite(_v5Pin, HIGH);
+        //TODO:
+        // pinMode(_gndPin, OUTPUT);
+        // digitalWrite(_gndPin, LOW);
     }
 
     void loop() override {
